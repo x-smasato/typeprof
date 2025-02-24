@@ -1,0 +1,46 @@
+{
+  "name": "vscode-typeprof",
+  "displayName": "TypeProf for Visual Studio Code",
+  "description": "Ruby TypeProf integration for Visual Studio Code",
+  "version": "0.1.0",
+  "publisher": "ruby",
+  "engines": {
+    "vscode": "^1.52.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:ruby"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "TypeProf",
+      "properties": {
+        "typeprof.server.path": {
+          "type": "string",
+          "default": null,
+          "description": "Path to TypeProf executable"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node ./out/test/runTest.js"
+  },
+  "dependencies": {
+    "@types/cross-spawn": "^6.0.6",
+    "cross-spawn": "^7.0.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "@types/vscode": "^1.97.0",
+    "typescript": "^5.7.3",
+    "vscode": "^1.1.37"
+  }
+}
