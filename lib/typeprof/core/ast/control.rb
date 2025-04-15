@@ -452,7 +452,11 @@ module TypeProf::Core
           result_vtx = old_vtxs[var].new_vertex(genv, self)
           result_vtxs[var] = result_vtx
 
+          unless body_vtxs[var] == old_vtxs[var]
+
           @changes.add_edge(genv, body_vtxs[var], result_vtx)
+
+          end
 
           rescue_vtxs.each do |rescue_vtx|
             @changes.add_edge(genv, rescue_vtx[var], result_vtx)
