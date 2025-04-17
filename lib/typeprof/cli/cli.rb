@@ -131,11 +131,19 @@ module TypeProf::CLI
         tokens.each_with_index do |(pos, type, token), i|
           next unless type == :on_comment
           
-          if token.match?(/\s*#\s*tp-ignore\b/)
-            ignored.add(pos[0])
-          elsif token.match?(/\s*#\s*tp-ignore-next-line\b/)
+          if token.match?(/\s*#\s*tp-ignore-next-line\b/)
             next_line = pos[0] + 1
             ignored.add(next_line)
+            
+            if @core_options[:show_errors]
+              $stderr.puts "Debug: Found tp-ignore-next-line at line #{pos[0]}, ignoring line #{next_line}"
+            end
+          elsif token.match?(/\s*#\s*tp-ignore\b/)
+            ignored.add(pos[0])
+            
+            if @core_options[:show_errors]
+              $stderr.puts "Debug: Found tp-ignore at line #{pos[0]}"
+            end
           end
         end
         
