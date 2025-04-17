@@ -120,6 +120,35 @@ module TypeProf::CLI
       raise
     end
 
+    def collect_ignored_lines(path)
+      ignored = Set.new
+      
+      begin
+        original_path = path.end_with?('.rbe.rb') ? path.sub(/\.rbe\.rb$/, '.rb') : path
+        content = File.read(original_path)
+        tokens = Ripper.lex(content)
+        
+        tokens.each_with_index do |(pos, type, token), i|
+          next unless type == :on_comment
+          
+          if token.match?(/\s*#\s*tp-ignore\b/)
+            ignored.add(pos[0])
+          elsif token.match?(/\s*#\s*tp-ignore-next-line\b/)
+            next_line = pos[0] + 1
+            ignored.add(next_line)
+          end
+        end
+        
+        if @core_options[:show_errors] && path != original_path
+          $stderr.puts "Debug: Collected ignored lines for #{original_path}: #{ignored.to_a.sort}"
+        end
+      rescue => e
+        $stderr.puts "Warning: Failed to collect ignored lines from #{original_path}: #{e.message}" if @core_options[:show_errors]
+      end
+      
+      ignored
+    end
+
     def run_cli
       core = TypeProf::Core::Service.new(@core_options)
 
@@ -130,7 +159,7 @@ module TypeProf::CLI
       set_profiler do
         output = @cli_options[:output]
 
-        core.batch(files, @cli_options[:output])
+        modified_batch(core, files, output)
 
         output.close
       end
@@ -138,6 +167,65 @@ module TypeProf::CLI
     rescue OptionParser::InvalidOption, OptionParser::MissingArgument
       puts $!
       exit 1
+    end
+    
+    def modified_batch(core, files, output)
+      if @core_options[:output_typeprof_version]
+        output.puts "# TypeProf #{ TypeProf::VERSION }"
+        output.puts
+      end
+
+      i = 0
+      show_files = files.select do |file|
+        if @core_options[:display_indicator]
+          $stderr << "\r[%d/%d] %s\e[K" % [i, files.size, file]
+          i += 1
+        end
+
+        content = File.read(file)
+        res = core.update_file(file, content)
+
+        if res
+          true
+        else
+          output.puts "# failed to analyze: #{ file }"
+          false
+        end
+      end
+      
+      if @core_options[:display_indicator]
+        $stderr << "\r\e[K"
+      end
+
+      first = true
+      show_files.each do |file|
+        next if File.extname(file) == ".rbs"
+        output.puts unless first
+        first = false
+        output.puts "# #{ file }"
+        
+        if @core_options[:output_diagnostics]
+          ignored = collect_ignored_lines(file)
+          
+          if @core_options[:show_errors]
+            $stderr.puts "Debug: Ignored lines for #{file}: #{ignored.to_a.sort.join(', ')}"
+          end
+          
+          diagnostics = []
+          core.diagnostics(file) { |diag| diagnostics << diag }
+          filtered_diagnostics = TypeProf::DiagnosticFilter.new(ignored).call(diagnostics)
+          
+          if @core_options[:show_errors]
+            $stderr.puts "Debug: Total diagnostics: #{diagnostics.size}, Filtered: #{diagnostics.size - filtered_diagnostics.size}"
+          end
+          
+          filtered_diagnostics.each do |diag|
+            output.puts "# #{ diag.code_range.to_s }:#{ diag.msg }"
+          end
+        end
+        
+        output.puts core.dump_declarations(file)
+      end
     end
 
     def find_files
