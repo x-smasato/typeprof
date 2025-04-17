@@ -1,13 +1,16 @@
 1 + 1 # This is fine
 
-# This should show a type error
-1 + "a"
+1 + "str" # This should show a type error
 
-# This should be ignored with tp-ignore
-1 + "b" # tp-ignore
+# typeprof:disable
+1 + "str" # This should be ignored (block mode)
+# typeprof:enable
 
-# This should show a type error
-1 + "c"
+1 + "str" # typeprof:disable
 
-# This should show a type error
-1 + "d"
+# typeprof:disable
+1 + "str"  # This should be ignored (block mode)
+1 + "str"  # This should be ignored (block mode)
+# typeprof:enable
+
+1 + "str"  # This should show a type error again
