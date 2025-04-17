@@ -1,12 +1,10 @@
 module TypeProf::LSP
-  require 'prism'
-
   module ErrorCodes
-    ParseError = -32_700
-    InvalidRequest = -32_600
-    MethodNotFound = -32_601
-    InvalidParams = -32_602
-    InternalError = -32_603
+    ParseError = -32700
+    InvalidRequest = -32600
+    MethodNotFound = -32601
+    InvalidParams = -32602
+    InternalError = -32603
   end
 
   class Server
@@ -21,7 +19,7 @@ module TypeProf::LSP
     end
 
     def self.start_socket(core_options)
-      Socket.tcp_server_sockets('localhost', nil) do |servs|
+      Socket.tcp_server_sockets("localhost", nil) do |servs|
         serv = servs[0].local_address
         $stdout << JSON.generate({
                                    host: serv.ip_address,
@@ -33,7 +31,7 @@ module TypeProf::LSP
         $stdout = $stderr
 
         Socket.accept_loop(servs) do |sock|
-          sock.set_encoding('UTF-8')
+          sock.set_encoding("UTF-8")
           begin
             reader = Reader.new(sock)
             writer = Writer.new(sock)
@@ -57,7 +55,7 @@ module TypeProf::LSP
       @open_texts = {}
       @exit = false
       @signature_enabled = true
-      @url_schema = url_schema || (File::ALT_SEPARATOR != '\\' ? 'file://' : 'file:///')
+      @url_schema = url_schema || (File::ALT_SEPARATOR != "\\" ? "file://" : "file:///")
       @publish_all_diagnostics = publish_all_diagnostics # TODO: implement more dedicated publish feature
       @diagnostic_severity = :error
     end
@@ -65,7 +63,7 @@ module TypeProf::LSP
     attr_reader :open_texts
     attr_accessor :signature_enabled
 
-    # : (String) -> String
+    #: (String) -> String
     def path_to_uri(path)
       @url_schema + File.expand_path(path)
     end
@@ -74,11 +72,11 @@ module TypeProf::LSP
       url.delete_prefix(@url_schema)
     end
 
-    # : (Array[String]) -> void
+    #: (Array[String]) -> void
     def add_workspaces(folders)
       folders.each do |path|
-        conf_path = ['.json', '.jsonc'].map do |ext|
-          File.join(path, 'typeprof.conf' + ext)
+        conf_path = [".json", ".jsonc"].map do |ext|
+          File.join(path, "typeprof.conf" + ext)
         end.find do |path|
           File.readable?(path)
         end
@@ -115,16 +113,17 @@ module TypeProf::LSP
     # : (String) -> bool
     def target_path?(path)
       return true if @rbs_dir && path.start_with?(@rbs_dir)
-
       @cores.each do |folder, _|
         return true if path.start_with?(folder)
       end
-      false
+      return false
     end
 
     def each_core(path)
       @cores.each do |folder, core|
-        yield core if path.start_with?(folder) || @rbs_dir && path.start_with?(@rbs_dir)
+        if path.start_with?(folder) || @rbs_dir && path.start_with?(@rbs_dir)
+          yield core
+        end
       end
     end
 
@@ -237,30 +236,17 @@ module TypeProf::LSP
       path = uri_to_path(uri)
       return unless target_path?(path)
 
-      warn "\nDebug: Publishing diagnostics for #{path} (URI: #{uri})" if @core_options[:show_errors]
-
       all_diagnostics = []
       each_core(path) do |core|
         core.diagnostics(path) { |diag| all_diagnostics << diag }
       end
 
-      # 無視する行とブロックを収集
       ignored_lines, ignored_blocks = collect_ignored_lines(path)
 
-      if @core_options[:show_errors]
-        warn "Debug: Collected ignored lines for #{path}: #{ignored_lines.to_a.sort}"
-        warn "Debug: Collected ignored blocks for #{path}: #{ignored_blocks.inspect}"
-        warn "Debug: Original diagnostics count for #{path}: #{all_diagnostics.size}"
-      end
-
-      # DiagnosticFilter を使ってフィルタリング
       filtered_diagnostics = TypeProf::DiagnosticFilter.new(
         ignored_lines,
         ignored_blocks,
-        @core_options[:show_errors]
       ).call(all_diagnostics)
-
-      warn "Debug: Filtered diagnostics count for #{path}: #{filtered_diagnostics.size}" if @core_options[:show_errors]
 
       diagnostics = filtered_diagnostics.map do |diag|
         {
@@ -386,13 +372,11 @@ module TypeProf::LSP
     def read
       while line = @io.gets
         line2 = @io.gets
-        # typeprof:disable
         raise ProtocolError, 'LSP broken header' unless line =~ /\AContent-length: (\d+)\r\n\z/i && line2 == "\r\n"
 
         len = ::Regexp.last_match(1).to_i
         json = JSON.parse(@io.read(len), symbolize_names: true)
         yield json
-
       end
     end
   end
@@ -404,9 +388,9 @@ module TypeProf::LSP
     end
 
     def write(**json)
-      json = JSON.generate(json.merge(jsonrpc: '2.0'))
+      json = JSON.generate(json.merge(jsonrpc: "2.0"))
       @mutex.synchronize do
-        @io << "Content-Length: #{json.bytesize}\r\n\r\n" << json
+        @io << "Content-Length: #{ json.bytesize }\r\n\r\n" << json
         @io.flush
       end
     end

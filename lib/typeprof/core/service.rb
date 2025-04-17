@@ -331,7 +331,7 @@ module TypeProf::Core
               if me
                 if !me.decls.empty?
                   me.decls.each do |mdecl|
-                    return "#{ orig_ty.show }##{ mid } : #{ mdecl.show }" #
+                    return "#{ orig_ty.show }##{ mid } : #{ mdecl.show }"
                   end
                 end
                 if !me.defs.empty?

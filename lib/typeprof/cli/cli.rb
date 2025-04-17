@@ -3,7 +3,7 @@ module TypeProf::CLI
     def initialize(argv)
       opt = OptionParser.new
 
-      opt.banner = "Usage: #{opt.program_name} [options] files_or_dirs..."
+      opt.banner = "Usage: #{ opt.program_name } [options] files_or_dirs..."
 
       core_options = {}
       lsp_options = {}
@@ -12,53 +12,43 @@ module TypeProf::CLI
       output = nil
       rbs_collection_path = nil
 
-      opt.separator ''
-      opt.separator 'Options:'
-      opt.on('-o OUTFILE', 'Output to OUTFILE instead of stdout') { |v| output = v }
-      opt.on('-q', '--quiet', 'Quiet mode') do
+      opt.separator ""
+      opt.separator "Options:"
+      opt.on("-o OUTFILE", "Output to OUTFILE instead of stdout") {|v| output = v }
+      opt.on("-q", "--quiet", "Quiet mode") do
         core_options[:display_indicator] = false
       end
-      opt.on('-v', '--verbose', 'Verbose mode') do
+      opt.on("-v", "--verbose", "Verbose mode") do
         core_options[:show_errors] = true
       end
-      opt.on('--version', 'Display typeprof version') { cli_options[:display_version] = true }
-      opt.on('--collection PATH', 'File path of collection configuration') { |v| rbs_collection_path = v }
-      opt.on('--no-collection', 'Ignore collection configuration') { rbs_collection_path = :no }
-      opt.on('--lsp', 'LSP server mode') do |_v|
+      opt.on("--version", "Display typeprof version") { cli_options[:display_version] = true }
+      opt.on("--collection PATH", "File path of collection configuration") { |v| rbs_collection_path = v }
+      opt.on("--no-collection", "Ignore collection configuration") { rbs_collection_path = :no }
+      opt.on("--lsp", "LSP server mode") do |v|
         core_options[:display_indicator] = false
         cli_options[:lsp] = true
       end
 
-      opt.separator ''
-      opt.separator 'Analysis output options:'
-      opt.on('--[no-]show-typeprof-version', 'Display TypeProf version in a header') do |v|
-        core_options[:output_typeprof_version] = v
-      end
-      opt.on('--[no-]show-errors', 'Display possible errors found during the analysis') do |v|
-        core_options[:output_diagnostics] = v
-      end
-      opt.on('--[no-]show-parameter-names', 'Display parameter names for methods') do |v|
-        core_options[:output_parameter_names] = v
-      end
-      opt.on('--[no-]show-source-locations', 'Display definition source locations for methods') do |v|
-        core_options[:output_source_locations] = v
-      end
+      opt.separator ""
+      opt.separator "Analysis output options:"
+      opt.on("--[no-]show-typeprof-version", "Display TypeProf version in a header") {|v| core_options[:output_typeprof_version] = v }
+      opt.on("--[no-]show-errors", "Display possible errors found during the analysis") {|v| core_options[:output_diagnostics] = v }
+      opt.on("--[no-]show-parameter-names", "Display parameter names for methods") {|v| core_options[:output_parameter_names] = v }
+      opt.on("--[no-]show-source-locations", "Display definition source locations for methods") {|v| core_options[:output_source_locations] = v }
 
-      opt.separator ''
-      opt.separator 'Advanced options:'
-      opt.on('--[no-]stackprof MODE', /\Acpu|wall|object\z/, 'Enable stackprof (for debugging purpose)') do |v|
-        cli_options[:stackprof] = v.to_sym
-      end
+      opt.separator ""
+      opt.separator "Advanced options:"
+      opt.on("--[no-]stackprof MODE", /\Acpu|wall|object\z/, "Enable stackprof (for debugging purpose)") {|v| cli_options[:stackprof] = v.to_sym }
 
-      opt.separator ''
-      opt.separator 'LSP options:'
-      opt.on('--port PORT', Integer, 'Specify a port number to listen for requests on') { |v| lsp_options[:port] = v }
-      opt.on('--stdio', 'Use stdio for LSP transport') { |v| lsp_options[:stdio] = v }
+      opt.separator ""
+      opt.separator "LSP options:"
+      opt.on("--port PORT", Integer, "Specify a port number to listen for requests on") {|v| lsp_options[:port] = v }
+      opt.on("--stdio", "Use stdio for LSP transport") {|v| lsp_options[:stdio] = v }
 
       opt.parse!(argv)
 
       if !cli_options[:lsp] && !lsp_options.empty?
-        raise OptionParser::InvalidOption.new('lsp options with non-lsp mode')
+        raise OptionParser::InvalidOption.new("lsp options with non-lsp mode")
       end
 
       @core_options = {
@@ -67,21 +57,22 @@ module TypeProf::CLI
         output_typeprof_version: true,
         output_errors: false,
         output_parameter_names: false,
-        output_source_locations: false
+        output_source_locations: false,
       }.merge(core_options)
 
       @lsp_options = {
         port: 0,
-        stdio: false
+        stdio: false,
       }.merge(lsp_options)
 
       @cli_options = {
         argv:,
-        output: output ? open(output, 'w') : $stdout.dup,
+        output: output ? open(output, "w") : $stdout.dup,
         display_version: false,
         stackprof: nil,
-        lsp: false
+        lsp: false,
       }.merge(cli_options)
+
     rescue OptionParser::InvalidOption, OptionParser::MissingArgument
       puts $!
       exit 1
@@ -95,11 +86,13 @@ module TypeProf::CLI
         return nil unless path
       end
 
-      raise OptionParser::InvalidOption.new("file not found: #{path}") unless File.readable?(path)
+      if !File.readable?(path)
+        raise OptionParser::InvalidOption.new("file not found: #{ path }")
+      end
 
       lock_path = RBS::Collection::Config.to_lockfile_path(Pathname(path))
-      unless File.readable?(lock_path)
-        raise OptionParser::InvalidOption.new("file not found: #{lock_path}; please run 'rbs collection install")
+      if !File.readable?(lock_path)
+        raise OptionParser::InvalidOption.new("file not found: #{ lock_path.to_s }; please run 'rbs collection install")
       end
 
       RBS::Collection::Config::Lockfile.from_lockfile(lockfile_path: lock_path, data: YAML.load_file(lock_path))
@@ -108,6 +101,7 @@ module TypeProf::CLI
     attr_reader :core_options, :lsp_options, :cli_options
 
     def run
+
       if @cli_options[:lsp]
         run_lsp
       else
@@ -122,7 +116,7 @@ module TypeProf::CLI
         TypeProf::LSP::Server.start_socket(@core_options)
       end
     rescue Exception
-      puts $!.detailed_message(highlight: false).gsub(/^/, '---')
+      puts $!.detailed_message(highlight: false).gsub(/^/, "---")
       raise
     end
 
@@ -136,7 +130,6 @@ module TypeProf::CLI
 
         result = Prism.parse(content)
 
-        # 直接各行を処理するアプローチに変更
         lines = content.lines
 
         # コメントを行ごとに整理
@@ -147,7 +140,6 @@ module TypeProf::CLI
           line_comments[line] << comment
         end
 
-        # コードがある行を抽出
         code_lines = Set.new
         collect_code_lines(result.value, code_lines)
 
@@ -162,7 +154,6 @@ module TypeProf::CLI
           has_disable = comment_text.match?(/\s*#\s*typeprof:disable\b/) || line_text.match?(/\s*#\s*typeprof:disable\b/)
           has_enable = comment_text.match?(/\s*#\s*typeprof:enable\b/) || line_text.match?(/\s*#\s*typeprof:enable\b/)
 
-          # ロジック修正: ブロックの内外を優先して判定
           if current_block_start
             # ブロック内にいる場合
             if has_enable
@@ -175,7 +166,6 @@ module TypeProf::CLI
               ignored_lines.add(line_num)
             end
           else
-            # ブロック外にいる場合
             if has_disable
               if has_code && !line_text.strip.start_with?('#') # コードがあり、行頭コメントではない場合 (インラインdisable)
                 # コードと同じ行にある disable はその行だけ無視 (ブロック開始しない)
@@ -225,7 +215,7 @@ module TypeProf::CLI
     def run_cli
       core = TypeProf::Core::Service.new(@core_options)
 
-      puts "typeprof #{TypeProf::VERSION}" if @cli_options[:display_version]
+      puts "typeprof #{ TypeProf::VERSION }" if @cli_options[:display_version]
 
       files = find_files
 
@@ -236,6 +226,7 @@ module TypeProf::CLI
 
         output.close
       end
+
     rescue OptionParser::InvalidOption, OptionParser::MissingArgument
       puts $!
       exit 1
@@ -277,29 +268,14 @@ module TypeProf::CLI
 
         if @core_options[:output_diagnostics]
           ignored_lines, ignored_blocks = collect_ignored_lines(file)
-          # デバッグ出力追加: ignored_lines と ignored_blocks の内容を stderr に表示
-          # warn "[DEBUG] Ignored lines for #{file}: #{ignored_lines.to_a.sort.inspect}"
-          # puts "ignored_lines: #{ignored_lines.to_a.sort.join(', ')}" # コメントアウトまたは削除
-          # puts "ignored_blocks: #{ignored_blocks.inspect}" # コメントアウトまたは削除
-
-          # if @core_options[:show_errors] # このブロックは不要になったため削除
-          #   # warn "Debug: Ignored lines for #{file}: #{ignored_lines.to_a.sort.join(', ')}" # 重複するためコメントアウト
-          #   # warn "Debug: Ignored blocks for #{file}: #{ignored_blocks.inspect}" # 重複するためコメントアウト
-          # end
 
           diagnostics = []
           core.diagnostics(file) { |diag| diagnostics << diag }
 
-          # デバッグモードを有効にしてフィルタリングを実行
           filtered_diagnostics = TypeProf::DiagnosticFilter.new(
             ignored_lines,
             ignored_blocks,
-            @core_options[:show_errors]
           ).call(diagnostics)
-
-          # if @core_options[:show_errors] # このブロックは不要になったため削除
-          #   warn "Debug: Total diagnostics: #{diagnostics.size}, Filtered: #{diagnostics.size - filtered_diagnostics.size}"
-          # end
 
           filtered_diagnostics.each do |diag|
             output.puts "# #{diag.code_range}:#{diag.msg}"
@@ -314,17 +290,17 @@ module TypeProf::CLI
       files = []
       @cli_options[:argv].each do |path|
         if File.directory?(path)
-          files.concat(Dir.glob("#{path}/**/*.{rb,rbs}"))
+          files.concat(Dir.glob("#{ path }/**/*.{rb,rbs}"))
         elsif File.file?(path)
           files << path
         else
-          raise OptionParser::InvalidOption.new("no such file or directory -- #{path}")
+          raise OptionParser::InvalidOption.new("no such file or directory -- #{ path }")
         end
       end
 
       if files.empty?
         exit if @cli_options[:display_version]
-        raise OptionParser::InvalidOption.new('no input files')
+        raise OptionParser::InvalidOption.new("no input files")
       end
 
       files
@@ -332,12 +308,13 @@ module TypeProf::CLI
 
     def set_profiler
       if @cli_options[:stackprof]
-        require 'stackprof'
-        out = "typeprof-stackprof-#{@cli_options[:stackprof]}.dump"
+        require "stackprof"
+        out = "typeprof-stackprof-#{ @cli_options[:stackprof] }.dump"
         StackProf.start(mode: @cli_options[:stackprof], out: out, raw: true)
       end
 
       yield
+
     ensure
       if @cli_options[:stackprof] && defined?(StackProf)
         StackProf.stop

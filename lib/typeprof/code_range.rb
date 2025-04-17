@@ -33,14 +33,13 @@ module TypeProf
     end
 
     def to_s
-      format('(%d,%d)', @lineno, @column)
+      "(%d,%d)" % [@lineno, @column]
     end
 
     alias inspect to_s
 
     def left
       raise if @column == 0
-
       CodePosition.new(@lineno, @column - 1)
     end
 
@@ -68,7 +67,7 @@ module TypeProf
         pos2 = CodePosition.new(row, col)
       else
         p node.class.ancestors
-        raise "unknown type: #{node.class}"
+        raise "unknown type: #{ node.class }"
       end
       new(pos1, pos2)
     end
@@ -100,7 +99,7 @@ module TypeProf
     end
 
     def to_s
-      format('%p-%p', @first, @last)
+      "%p-%p" % [@first, @last]
     end
 
     alias inspect to_s
