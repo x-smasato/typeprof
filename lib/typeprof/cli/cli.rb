@@ -133,52 +133,93 @@ module TypeProf::CLI
       begin
         original_path = path.end_with?('.rbe.rb') ? path.sub(/\.rbe\.rb$/, '.rb') : path
         content = File.read(original_path)
-        tokens = Ripper.lex(content)
 
-        line_tokens = Hash.new { |h, k| h[k] = [] }
-        tokens.each do |(pos, type, token)|
-          line_tokens[pos[0]] << [type, token, pos]
+        result = Prism.parse(content)
+
+        # 直接各行を処理するアプローチに変更
+        lines = content.lines
+
+        # コメントを行ごとに整理
+        line_comments = {}
+        result.comments.each do |comment|
+          line = comment.location.start_line
+          line_comments[line] ||= []
+          line_comments[line] << comment
         end
 
-        current_block_start = nil
-        line_tokens.each do |line, tokens_in_line|
-          has_code = tokens_in_line.any? { |type, _, _| type != :on_comment }
-          has_disable = tokens_in_line.any? do |type, token, _|
-            type == :on_comment && token.match?(/\s*#\s*typeprof:disable\b/)
-          end
-          has_enable = tokens_in_line.any? do |type, token, _|
-            type == :on_comment && token.match?(/\s*#\s*typeprof:enable\b/)
-          end
+        # コードがある行を抽出
+        code_lines = Set.new
+        collect_code_lines(result.value, code_lines)
 
-          if has_disable
-            if has_code
-              # コードと同じ行にdisableコメントがある場合は、その行を無視
-              ignored_lines.add(line)
-            elsif !current_block_start
-              # コードがなく、ブロック開始されていない場合は新しいブロック開始
-              current_block_start = line
+        current_block_start = nil
+
+        # 各行を1行ずつ確認（1-indexed）
+        1.upto(lines.size) do |line_num|
+          comments = line_comments[line_num] || []
+          comment_text = comments.map { |c| c.location.slice }.join(' ')
+          line_text = lines[line_num - 1] || ''
+          has_code = code_lines.include?(line_num)
+          has_disable = comment_text.match?(/\s*#\s*typeprof:disable\b/) || line_text.match?(/\s*#\s*typeprof:disable\b/)
+          has_enable = comment_text.match?(/\s*#\s*typeprof:enable\b/) || line_text.match?(/\s*#\s*typeprof:enable\b/)
+
+          # ロジック修正: ブロックの内外を優先して判定
+          if current_block_start
+            # ブロック内にいる場合
+            if has_enable
+              # enable コメントが見つかったらブロック終了
+              ignored_lines.add(line_num) # enable 行も無視
+              ignored_blocks << [current_block_start, line_num]
+              current_block_start = nil
+            else
+              # ブロック内で enable 以外なら無視
+              ignored_lines.add(line_num)
             end
-          elsif has_enable && current_block_start
-            # enableコメントがある場合は範囲指定モードを終了
-            ignored_blocks << [current_block_start, line]
-            current_block_start = nil
+          else
+            # ブロック外にいる場合
+            if has_disable
+              if has_code && !line_text.strip.start_with?('#') # コードがあり、行頭コメントではない場合 (インラインdisable)
+                # コードと同じ行にある disable はその行だけ無視 (ブロック開始しない)
+                ignored_lines.add(line_num)
+              else
+                # コードがない行、または行頭コメントの disable はブロック開始
+                ignored_lines.add(line_num) # disable 行も無視
+                current_block_start = line_num
+              end
+            end
+            # ブロック外で disable も enable もない行は 何もしない (無視しない)
           end
         end
 
         # ファイル末尾までブロックが続いていた場合
-        ignored_blocks << [current_block_start, Float::INFINITY] if current_block_start
-
-        if @core_options[:show_errors]
-          warn "Debug: Collected ignored lines for #{original_path}: #{ignored_lines.to_a.sort}"
-          warn "Debug: Collected ignored blocks for #{original_path}: #{ignored_blocks.inspect}"
+        if current_block_start
+          ignored_blocks << [current_block_start, Float::INFINITY]
+          # ファイル末尾までの行を無視対象に追加
+          (current_block_start + 1).upto(lines.size) do |line_num|
+            ignored_lines.add(line_num)
+          end
         end
       rescue StandardError => e
-        if @core_options[:show_errors]
+        if @core_options[:output_diagnostics]
           warn "Warning: Failed to collect ignored lines from #{original_path}: #{e.message}"
         end
       end
 
       [ignored_lines, ignored_blocks]
+    end
+
+    # ノードから行番号を収集するヘルパーメソッド
+    def collect_code_lines(node, lines)
+      return unless node.is_a?(Prism::Node)
+
+      # 現在のノードの行番号を追加
+      if node.location
+        start_line = node.location.start_line
+        end_line = node.location.end_line
+        (start_line..end_line).each { |line| lines.add(line) }
+      end
+
+      # 子ノードを再帰的に処理
+      node.child_nodes.each { |child| collect_code_lines(child, lines) if child }
     end
 
     def run_cli
@@ -236,19 +277,29 @@ module TypeProf::CLI
 
         if @core_options[:output_diagnostics]
           ignored_lines, ignored_blocks = collect_ignored_lines(file)
+          # デバッグ出力追加: ignored_lines と ignored_blocks の内容を stderr に表示
+          # warn "[DEBUG] Ignored lines for #{file}: #{ignored_lines.to_a.sort.inspect}"
+          # puts "ignored_lines: #{ignored_lines.to_a.sort.join(', ')}" # コメントアウトまたは削除
+          # puts "ignored_blocks: #{ignored_blocks.inspect}" # コメントアウトまたは削除
 
-          if @core_options[:show_errors]
-            warn "Debug: Ignored lines for #{file}: #{ignored_lines.to_a.sort.join(', ')}"
-            warn "Debug: Ignored blocks for #{file}: #{ignored_blocks.inspect}"
-          end
+          # if @core_options[:show_errors] # このブロックは不要になったため削除
+          #   # warn "Debug: Ignored lines for #{file}: #{ignored_lines.to_a.sort.join(', ')}" # 重複するためコメントアウト
+          #   # warn "Debug: Ignored blocks for #{file}: #{ignored_blocks.inspect}" # 重複するためコメントアウト
+          # end
 
           diagnostics = []
           core.diagnostics(file) { |diag| diagnostics << diag }
-          filtered_diagnostics = TypeProf::DiagnosticFilter.new(ignored_lines, ignored_blocks).call(diagnostics)
 
-          if @core_options[:show_errors]
-            warn "Debug: Total diagnostics: #{diagnostics.size}, Filtered: #{diagnostics.size - filtered_diagnostics.size}"
-          end
+          # デバッグモードを有効にしてフィルタリングを実行
+          filtered_diagnostics = TypeProf::DiagnosticFilter.new(
+            ignored_lines,
+            ignored_blocks,
+            @core_options[:show_errors]
+          ).call(diagnostics)
+
+          # if @core_options[:show_errors] # このブロックは不要になったため削除
+          #   warn "Debug: Total diagnostics: #{diagnostics.size}, Filtered: #{diagnostics.size - filtered_diagnostics.size}"
+          # end
 
           filtered_diagnostics.each do |diag|
             output.puts "# #{diag.code_range}:#{diag.msg}"

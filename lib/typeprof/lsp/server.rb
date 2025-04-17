@@ -1,5 +1,5 @@
 module TypeProf::LSP
-  require 'ripper'
+  require 'prism'
 
   module ErrorCodes
     ParseError = -32_700
@@ -258,7 +258,11 @@ module TypeProf::LSP
       end
 
       # DiagnosticFilterを使用して診断をフィルタリング
-      filtered_diagnostics = TypeProf::DiagnosticFilter.new(ignored_lines, ignored_blocks).call(diagnostics)
+      filtered_diagnostics = TypeProf::DiagnosticFilter.new(
+        ignored_lines,
+        ignored_blocks,
+        @core_options[:show_errors]
+      ).call(diagnostics)
 
       if @core_options[:show_errors]
         warn "Debug: Total diagnostics: #{diagnostics.size}, Filtered: #{diagnostics.size - filtered_diagnostics.size}"
@@ -327,76 +331,91 @@ module TypeProf::LSP
           warn "Debug: Content first 100 chars: #{content[0..100]}"
         end
 
-        # Ripperの結果をより詳細に解析
-        tokens = Ripper.lex(content)
+        # Prismでパースする
+        result = Prism.parse(content)
 
-        if tokens.nil? || tokens.empty?
+        if result.failure?
           if @core_options[:show_errors]
-            warn "Error: Failed to lex content for #{path}. Content may be invalid or empty."
+            warn "Error: Failed to parse content for #{path}. Content may be invalid."
           end
           return [ignored_lines, ignored_blocks]
         end
 
-        # トークンを行ごとにマップする
-        line_tokens = {}
-        tokens.each do |(pos, type, token)|
-          line = pos[0]
-          line_tokens[line] ||= { tokens: [], text: '', has_code: false, has_comment: false }
-          line_tokens[line][:tokens] << [type, token, pos]
-          line_tokens[line][:text] += token
-          line_tokens[line][:has_code] = true if type != :on_comment
-          line_tokens[line][:has_comment] = true if type == :on_comment
+        # 直接各行を処理するアプローチに変更
+        lines = content.lines
+
+        # コメントを行ごとに整理
+        line_comments = {}
+        result.comments.each do |comment|
+          line = comment.location.start_line
+          line_comments[line] ||= []
+          line_comments[line] << comment
         end
 
-        # 各行でtypeprof:disableコメントを探す
+        # コードがある行を抽出
+        code_lines = Set.new
+        collect_code_lines(result.value, code_lines)
+
         current_block_start = nil
 
-        line_tokens.each do |line, info|
-          # コメントを探す
-          disable_comment = nil
-          enable_comment = nil
+        # 各行を1行ずつ確認（1-indexed）
+        1.upto(lines.size) do |line_num|
+          comments = line_comments[line_num] || []
 
-          info[:tokens].each do |(type, token, _pos)|
-            if type == :on_comment
-              if token.match?(/\s*#\s*typeprof:disable\b/)
-                disable_comment = token
-                warn "Debug: Found disable comment on line #{line + 1}: #{token}" if @core_options[:show_errors]
-              elsif token.match?(/\s*#\s*typeprof:enable\b/)
-                enable_comment = token
-                warn "Debug: Found enable comment on line #{line + 1}: #{token}" if @core_options[:show_errors]
-              end
+          # この行のすべてのコメントを連結したテキスト (行末コメントも含む)
+          comment_text = comments.map { |c| c.location.slice }.join(' ')
+          line_text = lines[line_num - 1] || ''
+
+          has_code = code_lines.include?(line_num)
+          has_disable = comment_text.match?(/\s*#\s*typeprof:disable\b/)
+          has_enable = comment_text.match?(/\s*#\s*typeprof:enable\b/)
+
+          # 行全体の内容を調べて、"typeprof:disable"が含まれているか確認 (行末コメント対応)
+          if !has_disable
+            if line_text.match?(/.*#.*typeprof:disable\b/)
+              has_disable = true
+              warn "Debug: Found inline disable comment on line #{line_num}" if @core_options[:show_errors]
+            elsif line_text.include?('# typeprof:disable')
+              has_disable = true
+              warn "Debug: Found exact inline disable comment on line #{line_num}" if @core_options[:show_errors]
             end
           end
 
-          # 行に「typeprof:disable」コメントがあるか
-          if disable_comment
-            if info[:has_code] && info[:tokens].any? { |type, _, _| type != :on_comment }
-              # コードと同じ行にdisableコメントがある場合（行末コメント）
-              # LSPは0-indexed、DiagnosticFilterは1-indexedを期待
-              ignored_lines.add(line + 1)
-              warn "Debug: Adding ignored line #{line + 1} with code and disable comment" if @core_options[:show_errors]
+          if has_disable
+            if has_code
+              # コードと同じ行にdisableコメントがある場合は、その行を無視
+              ignored_lines.add(line_num)
+              warn "Debug: Adding ignored line #{line_num} with code and disable comment" if @core_options[:show_errors]
             elsif !current_block_start
               # コードがなく、ブロック開始されていない場合は新しいブロック開始
-              current_block_start = line
-
-              warn "Debug: Starting block at line #{line + 1}" if @core_options[:show_errors]
+              current_block_start = line_num
+              warn "Debug: Starting block at line #{line_num}" if @core_options[:show_errors]
             end
+          elsif has_enable && current_block_start
+            # enableコメントがある場合は範囲指定モードを終了
+            ignored_blocks << [current_block_start, line_num]
+            warn "Debug: Adding block from #{current_block_start} to #{line_num}" if @core_options[:show_errors]
+            current_block_start = nil
           end
-
-          # 行に「typeprof:enable」コメントがあるか
-          next unless enable_comment && current_block_start
-
-          # enableコメントがある場合は範囲指定モードを終了
-          # CLIとの整合性を保つため、current_block_startそのままで処理する
-          ignored_blocks << [current_block_start + 1, line]
-          warn "Debug: Adding block from #{current_block_start + 1} to #{line}" if @core_options[:show_errors]
-          current_block_start = nil
         end
 
         # ファイル末尾までブロックが続いていた場合
         if current_block_start
-          ignored_blocks << [current_block_start + 1, Float::INFINITY]
-          warn "Debug: Adding end-of-file block from line #{current_block_start + 1}" if @core_options[:show_errors]
+          ignored_blocks << [current_block_start, Float::INFINITY]
+          warn "Debug: Adding end-of-file block from line #{current_block_start}" if @core_options[:show_errors]
+        end
+
+        # ブロック範囲内の行を処理
+        ignored_blocks.each do |start_line, end_line|
+          next_line = start_line + 1 # disableコメントの次の行から開始
+          end_line = lines.size if end_line == Float::INFINITY
+
+          # start_line と end_line の間の行を無視
+          (next_line...end_line).each do |line_num|
+            # ブロック内のすべての行を無視対象に追加（コードかどうかに関わらず）
+            ignored_lines.add(line_num)
+            warn "Debug: Adding block line #{line_num} to ignored lines" if @core_options[:show_errors]
+          end
         end
 
         if @core_options[:show_errors]
@@ -410,6 +429,21 @@ module TypeProf::LSP
         warn e.backtrace.join("\n") if @core_options[:show_errors]
         [Set.new, []]
       end
+    end
+
+    # ノードから行番号を収集するヘルパーメソッド
+    def collect_code_lines(node, lines)
+      return unless node.is_a?(Prism::Node)
+
+      # 現在のノードの行番号を追加
+      if node.location
+        start_line = node.location.start_line
+        end_line = node.location.end_line
+        (start_line..end_line).each { |line| lines.add(line) }
+      end
+
+      # 子ノードを再帰的に処理
+      node.child_nodes.each { |child| collect_code_lines(child, lines) if child }
     end
   end
 
