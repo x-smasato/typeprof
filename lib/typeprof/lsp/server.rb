@@ -1,10 +1,12 @@
 module TypeProf::LSP
+  require 'ripper'
+
   module ErrorCodes
-    ParseError = -32700
-    InvalidRequest = -32600
-    MethodNotFound = -32601
-    InvalidParams = -32602
-    InternalError = -32603
+    ParseError = -32_700
+    InvalidRequest = -32_600
+    MethodNotFound = -32_601
+    InvalidParams = -32_602
+    InternalError = -32_603
   end
 
   class Server
@@ -19,19 +21,19 @@ module TypeProf::LSP
     end
 
     def self.start_socket(core_options)
-      Socket.tcp_server_sockets("localhost", nil) do |servs|
+      Socket.tcp_server_sockets('localhost', nil) do |servs|
         serv = servs[0].local_address
         $stdout << JSON.generate({
-          host: serv.ip_address,
-          port: serv.ip_port,
-          pid: $$,
-        })
+                                   host: serv.ip_address,
+                                   port: serv.ip_port,
+                                   pid: $$
+                                 })
         $stdout.flush
 
         $stdout = $stderr
 
         Socket.accept_loop(servs) do |sock|
-          sock.set_encoding("UTF-8")
+          sock.set_encoding('UTF-8')
           begin
             reader = Reader.new(sock)
             writer = Writer.new(sock)
@@ -55,7 +57,7 @@ module TypeProf::LSP
       @open_texts = {}
       @exit = false
       @signature_enabled = true
-      @url_schema = url_schema || (File::ALT_SEPARATOR != "\\" ? "file://" : "file:///")
+      @url_schema = url_schema || (File::ALT_SEPARATOR != '\\' ? 'file://' : 'file:///')
       @publish_all_diagnostics = publish_all_diagnostics # TODO: implement more dedicated publish feature
       @diagnostic_severity = :error
     end
@@ -63,7 +65,7 @@ module TypeProf::LSP
     attr_reader :open_texts
     attr_accessor :signature_enabled
 
-    #: (String) -> String
+    # : (String) -> String
     def path_to_uri(path)
       @url_schema + File.expand_path(path)
     end
@@ -72,62 +74,57 @@ module TypeProf::LSP
       url.delete_prefix(@url_schema)
     end
 
-    #: (Array[String]) -> void
+    # : (Array[String]) -> void
     def add_workspaces(folders)
       folders.each do |path|
-        conf_path = [".json", ".jsonc"].map do |ext|
-          File.join(path, "typeprof.conf" + ext)
+        conf_path = ['.json', '.jsonc'].map do |ext|
+          File.join(path, 'typeprof.conf' + ext)
         end.find do |path|
           File.readable?(path)
         end
         unless conf_path
-          puts "typeprof.conf.json is not found in #{ path }"
+          puts "typeprof.conf.json is not found in #{path}"
           next
         end
         conf = TypeProf::LSP.load_json_with_comments(conf_path, symbolize_names: true)
-        if conf
-          if conf[:rbs_dir]
-            rbs_dir = File.expand_path(conf[:rbs_dir])
-          else
-            rbs_dir = File.expand_path(File.expand_path("sig", path))
-          end
-          @rbs_dir = rbs_dir
-          if conf[:typeprof_version] == "experimental"
-            if conf[:diagnostic_severity]
-              severity = conf[:diagnostic_severity].to_sym
-              case severity
-              when :error, :warning, :info, :hint
-                @diagnostic_severity = severity
-              else
-                puts "unknown severity: #{ severity }"
-              end
+        next unless conf
+
+        rbs_dir = File.expand_path(conf[:rbs_dir] || File.expand_path('sig', path))
+        @rbs_dir = rbs_dir
+        if conf[:typeprof_version] == 'experimental'
+          if conf[:diagnostic_severity]
+            severity = conf[:diagnostic_severity].to_sym
+            case severity
+            when :error, :warning, :info, :hint
+              @diagnostic_severity = severity
+            else
+              puts "unknown severity: #{severity}"
             end
-            conf[:analysis_unit_dirs].each do |dir|
-              dir = File.expand_path(dir, path)
-              core = @cores[dir] = TypeProf::Core::Service.new(@core_options)
-              core.add_workspace(dir, @rbs_dir)
-            end
-          else
-            puts "Unknown typeprof_version: #{ conf[:typeprof_version] }"
           end
+          conf[:analysis_unit_dirs].each do |dir|
+            dir = File.expand_path(dir, path)
+            core = @cores[dir] = TypeProf::Core::Service.new(@core_options)
+            core.add_workspace(dir, @rbs_dir)
+          end
+        else
+          puts "Unknown typeprof_version: #{conf[:typeprof_version]}"
         end
       end
     end
 
-    #: (String) -> bool
+    # : (String) -> bool
     def target_path?(path)
       return true if @rbs_dir && path.start_with?(@rbs_dir)
+
       @cores.each do |folder, _|
         return true if path.start_with?(folder)
       end
-      return false
+      false
     end
 
     def each_core(path)
       @cores.each do |folder, core|
-        if path.start_with?(folder) || @rbs_dir && path.start_with?(@rbs_dir)
-          yield core
-        end
+        yield core if path.start_with?(folder) || @rbs_dir && path.start_with?(@rbs_dir)
       end
     end
 
@@ -199,8 +196,6 @@ module TypeProf::LSP
             msg = msg_class.new(self, json)
             @running_requests_from_client[json[:id]] = msg if json[:id]
             msg.run
-          else
-
           end
         else
           # response
@@ -236,20 +231,184 @@ module TypeProf::LSP
     end
 
     def publish_diagnostics(uri)
-      (@publish_all_diagnostics ? @open_texts : [[uri, @open_texts[uri]]]).each do |uri, text|
-        diags = []
-        if text
-          @cores.each do |_, core|
-            core.diagnostics(text.path) do |diag|
-              diags << diag.to_lsp(severity: @diagnostic_severity)
+      text = @open_texts[uri]
+      return unless text
+
+      path = uri_to_path(uri)
+
+      warn "\nDebug: Publishing diagnostics for #{path} (URI: #{uri})" if @core_options[:show_errors]
+
+      diagnostics = []
+
+      # 無視する行とブロックを収集
+      ignored_lines, ignored_blocks = collect_ignored_lines(path)
+
+      if @core_options[:show_errors]
+        warn "Debug: Collected ignored lines for #{path}: #{ignored_lines.to_a.sort}"
+        warn "Debug: Collected ignored blocks for #{path}: #{ignored_blocks.inspect}"
+      end
+
+      each_core(path) do |core|
+        core.diagnostics(path) do |diag|
+          if @core_options[:show_errors]
+            warn "Debug: Found diagnostic: #{diag.code_range}: #{diag.msg} (line: #{diag.code_range.first.lineno})"
+          end
+          diagnostics << diag
+        end
+      end
+
+      # DiagnosticFilterを使用して診断をフィルタリング
+      filtered_diagnostics = TypeProf::DiagnosticFilter.new(ignored_lines, ignored_blocks).call(diagnostics)
+
+      if @core_options[:show_errors]
+        warn "Debug: Total diagnostics: #{diagnostics.size}, Filtered: #{diagnostics.size - filtered_diagnostics.size}"
+        filtered_diagnostics.each do |diag|
+          warn "Debug: Remaining diagnostic after filtering: #{diag.code_range}: #{diag.msg}"
+        end
+      end
+
+      # LSP形式に変換
+      lsp_diagnostics = filtered_diagnostics.map do |diag|
+        lsp_range = diag.code_range.to_lsp_range
+        warn "Debug: Converting to LSP range: #{lsp_range.inspect}" if @core_options[:show_errors]
+
+        {
+          range: lsp_range,
+          severity: lsp_severity(@diagnostic_severity),
+          message: diag.msg,
+          source: 'TypeProf'
+        }
+      end
+
+      warn "Debug: Sending #{lsp_diagnostics.size} diagnostics to editor" if @core_options[:show_errors]
+
+      send_notification(
+        'textDocument/publishDiagnostics',
+        uri: uri,
+        diagnostics: lsp_diagnostics
+      )
+    end
+
+    private
+
+    def lsp_severity(severity)
+      case severity
+      when :error
+        1   # Error
+      when :warning
+        2   # Warning
+      when :info
+        3   # Information
+      when :hint
+        4   # Hint
+      else
+        1   # デフォルトはError
+      end
+    end
+
+    def collect_ignored_lines(path)
+      ignored_lines = Set.new
+      ignored_blocks = []
+
+      begin
+        uri = path_to_uri(path)
+        text_obj = @open_texts[uri]
+
+        if text_obj.nil?
+          warn "Debug: No content found for #{path} (uri: #{uri})" if @core_options[:show_errors]
+          return [ignored_lines, ignored_blocks]
+        end
+
+        # Text オブジェクトから文字列を取得
+        content = text_obj.string
+
+        if @core_options[:show_errors]
+          warn "Debug: Processing content for #{path}, size: #{content.size}"
+          warn "Debug: Content first 100 chars: #{content[0..100]}"
+        end
+
+        # Ripperの結果をより詳細に解析
+        tokens = Ripper.lex(content)
+
+        if tokens.nil? || tokens.empty?
+          if @core_options[:show_errors]
+            warn "Error: Failed to lex content for #{path}. Content may be invalid or empty."
+          end
+          return [ignored_lines, ignored_blocks]
+        end
+
+        # トークンを行ごとにマップする
+        line_tokens = {}
+        tokens.each do |(pos, type, token)|
+          line = pos[0]
+          line_tokens[line] ||= { tokens: [], text: '', has_code: false, has_comment: false }
+          line_tokens[line][:tokens] << [type, token, pos]
+          line_tokens[line][:text] += token
+          line_tokens[line][:has_code] = true if type != :on_comment
+          line_tokens[line][:has_comment] = true if type == :on_comment
+        end
+
+        # 各行でtypeprof:disableコメントを探す
+        current_block_start = nil
+
+        line_tokens.each do |line, info|
+          # コメントを探す
+          disable_comment = nil
+          enable_comment = nil
+
+          info[:tokens].each do |(type, token, _pos)|
+            if type == :on_comment
+              if token.match?(/\s*#\s*typeprof:disable\b/)
+                disable_comment = token
+                warn "Debug: Found disable comment on line #{line + 1}: #{token}" if @core_options[:show_errors]
+              elsif token.match?(/\s*#\s*typeprof:enable\b/)
+                enable_comment = token
+                warn "Debug: Found enable comment on line #{line + 1}: #{token}" if @core_options[:show_errors]
+              end
             end
           end
+
+          # 行に「typeprof:disable」コメントがあるか
+          if disable_comment
+            if info[:has_code] && info[:tokens].any? { |type, _, _| type != :on_comment }
+              # コードと同じ行にdisableコメントがある場合（行末コメント）
+              # LSPは0-indexed、DiagnosticFilterは1-indexedを期待
+              ignored_lines.add(line + 1)
+              warn "Debug: Adding ignored line #{line + 1} with code and disable comment" if @core_options[:show_errors]
+            elsif !current_block_start
+              # コードがなく、ブロック開始されていない場合は新しいブロック開始
+              current_block_start = line
+
+              warn "Debug: Starting block at line #{line + 1}" if @core_options[:show_errors]
+            end
+          end
+
+          # 行に「typeprof:enable」コメントがあるか
+          next unless enable_comment && current_block_start
+
+          # enableコメントがある場合は範囲指定モードを終了
+          # CLIとの整合性を保つため、current_block_startそのままで処理する
+          ignored_blocks << [current_block_start + 1, line]
+          warn "Debug: Adding block from #{current_block_start + 1} to #{line}" if @core_options[:show_errors]
+          current_block_start = nil
         end
-        send_notification(
-          "textDocument/publishDiagnostics",
-          uri: uri,
-          diagnostics: diags
-        )
+
+        # ファイル末尾までブロックが続いていた場合
+        if current_block_start
+          ignored_blocks << [current_block_start + 1, Float::INFINITY]
+          warn "Debug: Adding end-of-file block from line #{current_block_start + 1}" if @core_options[:show_errors]
+        end
+
+        if @core_options[:show_errors]
+          warn "Debug: Final ignored lines for #{path}: #{ignored_lines.to_a.sort.join(', ')}"
+          warn "Debug: Final ignored blocks for #{path}: #{ignored_blocks.inspect}"
+        end
+
+        [ignored_lines, ignored_blocks]
+      rescue StandardError => e
+        warn "Warning: Failed to collect ignored lines from #{path}: #{e.message}" if @core_options[:show_errors]
+        warn e.backtrace.join("\n") if @core_options[:show_errors]
+        [Set.new, []]
       end
     end
   end
@@ -265,13 +424,12 @@ module TypeProf::LSP
     def read
       while line = @io.gets
         line2 = @io.gets
-        if line =~ /\AContent-length: (\d+)\r\n\z/i && line2 == "\r\n"
-          len = $1.to_i
-          json = JSON.parse(@io.read(len), symbolize_names: true)
-          yield json
-        else
-          raise ProtocolError, "LSP broken header"
-        end
+        raise ProtocolError, 'LSP broken header' unless line =~ /\AContent-length: (\d+)\r\n\z/i && line2 == "\r\n"
+
+        len = ::Regexp.last_match(1).to_i
+        json = JSON.parse(@io.read(len), symbolize_names: true)
+        yield json
+
       end
     end
   end
@@ -283,9 +441,9 @@ module TypeProf::LSP
     end
 
     def write(**json)
-      json = JSON.generate(json.merge(jsonrpc: "2.0"))
+      json = JSON.generate(json.merge(jsonrpc: '2.0'))
       @mutex.synchronize do
-        @io << "Content-Length: #{ json.bytesize }\r\n\r\n" << json
+        @io << "Content-Length: #{json.bytesize}\r\n\r\n" << json
         @io.flush
       end
     end

@@ -33,13 +33,14 @@ module TypeProf
     end
 
     def to_s
-      "(%d,%d)" % [@lineno, @column]
+      format('(%d,%d)', @lineno, @column)
     end
 
     alias inspect to_s
 
     def left
       raise if @column == 0
+
       CodePosition.new(@lineno, @column - 1)
     end
 
@@ -67,7 +68,7 @@ module TypeProf
         pos2 = CodePosition.new(row, col)
       else
         p node.class.ancestors
-        raise "unknown type: #{ node.class }"
+        raise "unknown type: #{node.class}"
       end
       new(pos1, pos2)
     end
@@ -99,13 +100,26 @@ module TypeProf
     end
 
     def to_s
-      "%p-%p" % [@first, @last]
+      format('%p-%p', @first, @last)
     end
 
     alias inspect to_s
 
     def ==(other)
       @first == other.first && @last == other.last
+    end
+
+    def to_lsp_range
+      {
+        start: {
+          line: @first.lineno - 1,     # LSPは0-basedなので1を引く
+          character: @first.column
+        },
+        end: {
+          line: @last.lineno - 1,      # LSPは0-basedなので1を引く
+          character: @last.column      # sizeメソッドは不要なので削除
+        }
+      }
     end
   end
 end
