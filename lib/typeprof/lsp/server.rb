@@ -235,10 +235,14 @@ module TypeProf::LSP
       return unless text
 
       path = uri_to_path(uri)
+      return unless target_path?(path)
 
       warn "\nDebug: Publishing diagnostics for #{path} (URI: #{uri})" if @core_options[:show_errors]
 
-      diagnostics = []
+      all_diagnostics = []
+      each_core(path) do |core|
+        core.diagnostics(path) { |diag| all_diagnostics << diag }
+      end
 
       # 無視する行とブロックを収集
       ignored_lines, ignored_blocks = collect_ignored_lines(path)
@@ -246,51 +250,28 @@ module TypeProf::LSP
       if @core_options[:show_errors]
         warn "Debug: Collected ignored lines for #{path}: #{ignored_lines.to_a.sort}"
         warn "Debug: Collected ignored blocks for #{path}: #{ignored_blocks.inspect}"
+        warn "Debug: Original diagnostics count for #{path}: #{all_diagnostics.size}"
       end
 
-      each_core(path) do |core|
-        core.diagnostics(path) do |diag|
-          if @core_options[:show_errors]
-            warn "Debug: Found diagnostic: #{diag.code_range}: #{diag.msg} (line: #{diag.code_range.first.lineno})"
-          end
-          diagnostics << diag
-        end
-      end
-
-      # DiagnosticFilterを使用して診断をフィルタリング
+      # DiagnosticFilter を使ってフィルタリング
       filtered_diagnostics = TypeProf::DiagnosticFilter.new(
         ignored_lines,
         ignored_blocks,
         @core_options[:show_errors]
-      ).call(diagnostics)
+      ).call(all_diagnostics)
 
-      if @core_options[:show_errors]
-        warn "Debug: Total diagnostics: #{diagnostics.size}, Filtered: #{diagnostics.size - filtered_diagnostics.size}"
-        filtered_diagnostics.each do |diag|
-          warn "Debug: Remaining diagnostic after filtering: #{diag.code_range}: #{diag.msg}"
-        end
-      end
+      warn "Debug: Filtered diagnostics count for #{path}: #{filtered_diagnostics.size}" if @core_options[:show_errors]
 
-      # LSP形式に変換
-      lsp_diagnostics = filtered_diagnostics.map do |diag|
-        lsp_range = diag.code_range.to_lsp_range
-        warn "Debug: Converting to LSP range: #{lsp_range.inspect}" if @core_options[:show_errors]
-
+      diagnostics = filtered_diagnostics.map do |diag|
         {
-          range: lsp_range,
+          range: diag.code_range.to_lsp_range,
           severity: lsp_severity(@diagnostic_severity),
-          message: diag.msg,
-          source: 'TypeProf'
+          source: 'TypeProf',
+          message: diag.msg
         }
       end
 
-      warn "Debug: Sending #{lsp_diagnostics.size} diagnostics to editor" if @core_options[:show_errors]
-
-      send_notification(
-        'textDocument/publishDiagnostics',
-        uri: uri,
-        diagnostics: lsp_diagnostics
-      )
+      send_notification('textDocument/publishDiagnostics', uri: uri, diagnostics: diagnostics)
     end
 
     private
@@ -315,36 +296,17 @@ module TypeProf::LSP
       ignored_blocks = []
 
       begin
-        uri = path_to_uri(path)
-        text_obj = @open_texts[uri]
+        # .rbe.rb ファイルの場合、元の .rb ファイルを読む（CLIと同じ）
+        original_path = path.end_with?('.rbe.rb') ? path.sub(/\.rbe\.rb$/, '.rb') : path
+        uri = path_to_uri(original_path)
+        # open_texts のキーは uri なので、まずそちらを優先して参照
+        content = @open_texts[uri]&.string || File.read(original_path)
 
-        if text_obj.nil?
-          warn "Debug: No content found for #{path} (uri: #{uri})" if @core_options[:show_errors]
-          return [ignored_lines, ignored_blocks]
-        end
-
-        # Text オブジェクトから文字列を取得
-        content = text_obj.string
-
-        if @core_options[:show_errors]
-          warn "Debug: Processing content for #{path}, size: #{content.size}"
-          warn "Debug: Content first 100 chars: #{content[0..100]}"
-        end
-
-        # Prismでパースする
         result = Prism.parse(content)
+        return [ignored_lines, ignored_blocks] unless result.success? # パース失敗時は無視
 
-        if result.failure?
-          if @core_options[:show_errors]
-            warn "Error: Failed to parse content for #{path}. Content may be invalid."
-          end
-          return [ignored_lines, ignored_blocks]
-        end
-
-        # 直接各行を処理するアプローチに変更
         lines = content.lines
 
-        # コメントを行ごとに整理
         line_comments = {}
         result.comments.each do |comment|
           line = comment.location.start_line
@@ -352,97 +314,63 @@ module TypeProf::LSP
           line_comments[line] << comment
         end
 
-        # コードがある行を抽出
         code_lines = Set.new
         collect_code_lines(result.value, code_lines)
 
         current_block_start = nil
 
-        # 各行を1行ずつ確認（1-indexed）
         1.upto(lines.size) do |line_num|
           comments = line_comments[line_num] || []
-
-          # この行のすべてのコメントを連結したテキスト (行末コメントも含む)
           comment_text = comments.map { |c| c.location.slice }.join(' ')
           line_text = lines[line_num - 1] || ''
-
           has_code = code_lines.include?(line_num)
-          has_disable = comment_text.match?(/\s*#\s*typeprof:disable\b/)
-          has_enable = comment_text.match?(/\s*#\s*typeprof:enable\b/)
+          has_disable = comment_text.match?(/\s*#\s*typeprof:disable\b/) || line_text.match?(/\s*#\s*typeprof:disable\b/)
+          has_enable = comment_text.match?(/\s*#\s*typeprof:enable\b/) || line_text.match?(/\s*#\s*typeprof:enable\b/)
 
-          # 行全体の内容を調べて、"typeprof:disable"が含まれているか確認 (行末コメント対応)
-          if !has_disable
-            if line_text.match?(/.*#.*typeprof:disable\b/)
-              has_disable = true
-              warn "Debug: Found inline disable comment on line #{line_num}" if @core_options[:show_errors]
-            elsif line_text.include?('# typeprof:disable')
-              has_disable = true
-              warn "Debug: Found exact inline disable comment on line #{line_num}" if @core_options[:show_errors]
-            end
-          end
-
-          if has_disable
-            if has_code
-              # コードと同じ行にdisableコメントがある場合は、その行を無視
+          if current_block_start
+            if has_enable
               ignored_lines.add(line_num)
-              warn "Debug: Adding ignored line #{line_num} with code and disable comment" if @core_options[:show_errors]
-            elsif !current_block_start
-              # コードがなく、ブロック開始されていない場合は新しいブロック開始
-              current_block_start = line_num
-              warn "Debug: Starting block at line #{line_num}" if @core_options[:show_errors]
+              ignored_blocks << [current_block_start, line_num]
+              current_block_start = nil
+            else
+              ignored_lines.add(line_num)
             end
-          elsif has_enable && current_block_start
-            # enableコメントがある場合は範囲指定モードを終了
-            ignored_blocks << [current_block_start, line_num]
-            warn "Debug: Adding block from #{current_block_start} to #{line_num}" if @core_options[:show_errors]
-            current_block_start = nil
+          elsif has_disable
+            if has_code && !line_text.strip.start_with?('#')
+              ignored_lines.add(line_num)
+            else
+              ignored_lines.add(line_num)
+              current_block_start = line_num
+            end
           end
         end
 
-        # ファイル末尾までブロックが続いていた場合
         if current_block_start
           ignored_blocks << [current_block_start, Float::INFINITY]
-          warn "Debug: Adding end-of-file block from line #{current_block_start}" if @core_options[:show_errors]
-        end
-
-        # ブロック範囲内の行を処理
-        ignored_blocks.each do |start_line, end_line|
-          next_line = start_line + 1 # disableコメントの次の行から開始
-          end_line = lines.size if end_line == Float::INFINITY
-
-          # start_line と end_line の間の行を無視
-          (next_line...end_line).each do |line_num|
-            # ブロック内のすべての行を無視対象に追加（コードかどうかに関わらず）
+          (current_block_start + 1).upto(lines.size) do |line_num|
             ignored_lines.add(line_num)
-            warn "Debug: Adding block line #{line_num} to ignored lines" if @core_options[:show_errors]
           end
         end
-
-        if @core_options[:show_errors]
-          warn "Debug: Final ignored lines for #{path}: #{ignored_lines.to_a.sort.join(', ')}"
-          warn "Debug: Final ignored blocks for #{path}: #{ignored_blocks.inspect}"
-        end
-
-        [ignored_lines, ignored_blocks]
+      rescue Errno::ENOENT
+        # ファイルが存在しない場合は無視リストは空
       rescue StandardError => e
-        warn "Warning: Failed to collect ignored lines from #{path}: #{e.message}" if @core_options[:show_errors]
-        warn e.backtrace.join("\n") if @core_options[:show_errors]
-        [Set.new, []]
+        if @core_options[:show_errors]
+          warn "Warning: Failed to collect ignored lines from #{original_path}: #{e.message}"
+        end
       end
+
+      [ignored_lines, ignored_blocks]
     end
 
-    # ノードから行番号を収集するヘルパーメソッド
     def collect_code_lines(node, lines)
       return unless node.is_a?(Prism::Node)
 
-      # 現在のノードの行番号を追加
       if node.location
         start_line = node.location.start_line
         end_line = node.location.end_line
         (start_line..end_line).each { |line| lines.add(line) }
       end
 
-      # 子ノードを再帰的に処理
       node.child_nodes.each { |child| collect_code_lines(child, lines) if child }
     end
   end
@@ -458,6 +386,7 @@ module TypeProf::LSP
     def read
       while line = @io.gets
         line2 = @io.gets
+        # typeprof:disable
         raise ProtocolError, 'LSP broken header' unless line =~ /\AContent-length: (\d+)\r\n\z/i && line2 == "\r\n"
 
         len = ::Regexp.last_match(1).to_i

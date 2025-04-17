@@ -34,12 +34,12 @@ module TypeProf
     def in_ignored_block?(line)
       @ignored_blocks.any? do |start_line, end_line|
         result = if end_line == Float::INFINITY
-          # 無限大の場合はstart_line以降すべてが対象
-          line >= start_line
-        else
-          # start_lineからend_lineまでの範囲（end_lineは含む）
-          (start_line..end_line).include?(line)
-        end
+                   # disable コメント行の *次* の行以降が対象
+                   line > start_line
+                 else
+                   # disable コメント行の *次* の行から enable コメント行の *前* の行までが対象
+                   line > start_line && line < end_line
+                 end
 
         if @debug && result
           # warn や puts を使用する (例)
