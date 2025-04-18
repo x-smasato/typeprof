@@ -22,10 +22,10 @@ module TypeProf::LSP
       Socket.tcp_server_sockets("localhost", nil) do |servs|
         serv = servs[0].local_address
         $stdout << JSON.generate({
-                                   host: serv.ip_address,
-                                   port: serv.ip_port,
-                                   pid: $$
-                                 })
+          host: serv.ip_address,
+          port: serv.ip_port,
+          pid: $$,
+        })
         $stdout.flush
 
         $stdout = $stderr
@@ -81,36 +81,40 @@ module TypeProf::LSP
           File.readable?(path)
         end
         unless conf_path
-          puts "typeprof.conf.json is not found in #{path}"
+          puts "typeprof.conf.json is not found in #{ path }"
           next
         end
         conf = TypeProf::LSP.load_json_with_comments(conf_path, symbolize_names: true)
-        next unless conf
-
-        rbs_dir = File.expand_path(conf[:rbs_dir] || File.expand_path('sig', path))
-        @rbs_dir = rbs_dir
-        if conf[:typeprof_version] == 'experimental'
-          if conf[:diagnostic_severity]
-            severity = conf[:diagnostic_severity].to_sym
-            case severity
-            when :error, :warning, :info, :hint
-              @diagnostic_severity = severity
-            else
-              puts "unknown severity: #{severity}"
+        if conf
+          if conf[:rbs_dir]
+            rbs_dir = File.expand_path(conf[:rbs_dir])
+          else
+            rbs_dir = File.expand_path(File.expand_path("sig", path))
+          end
+          @rbs_dir = rbs_dir
+          if conf[:typeprof_version] == "experimental"
+            if conf[:diagnostic_severity]
+              severity = conf[:diagnostic_severity].to_sym
+              case severity
+              when :error, :warning, :info, :hint
+                @diagnostic_severity = severity
+              else
+                puts "unknown severity: #{ severity }"
+              end
             end
+            conf[:analysis_unit_dirs].each do |dir|
+              dir = File.expand_path(dir, path)
+              core = @cores[dir] = TypeProf::Core::Service.new(@core_options)
+              core.add_workspace(dir, @rbs_dir)
+            end
+          else
+            puts "Unknown typeprof_version: #{ conf[:typeprof_version] }"
           end
-          conf[:analysis_unit_dirs].each do |dir|
-            dir = File.expand_path(dir, path)
-            core = @cores[dir] = TypeProf::Core::Service.new(@core_options)
-            core.add_workspace(dir, @rbs_dir)
-          end
-        else
-          puts "Unknown typeprof_version: #{conf[:typeprof_version]}"
         end
       end
     end
 
-    # : (String) -> bool
+    #: (String) -> bool
     def target_path?(path)
       return true if @rbs_dir && path.start_with?(@rbs_dir)
       @cores.each do |folder, _|
@@ -372,11 +376,13 @@ module TypeProf::LSP
     def read
       while line = @io.gets
         line2 = @io.gets
-        raise ProtocolError, 'LSP broken header' unless line =~ /\AContent-length: (\d+)\r\n\z/i && line2 == "\r\n"
-
-        len = ::Regexp.last_match(1).to_i
-        json = JSON.parse(@io.read(len), symbolize_names: true)
-        yield json
+        if line =~ /\AContent-length: (\d+)\r\n\z/i && line2 == "\r\n"
+          len = $1.to_i
+          json = JSON.parse(@io.read(len), symbolize_names: true)
+          yield json
+        else
+          raise ProtocolError, "LSP broken header"
+        end
       end
     end
   end
