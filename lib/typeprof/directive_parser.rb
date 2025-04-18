@@ -2,22 +2,11 @@ require 'set'
 
 module TypeProf
   class DirectiveParser
-    def self.collect_ignored_lines(path, options = {}, file_content: nil)
+    def self.collect_ignored_lines(content)
       ignored_lines = Set.new
       ignored_blocks = []
 
       begin
-        original_path = path.end_with?('.rbe.rb') ? path.sub(/\.rbe\.rb$/, '.rb') : path
-
-        content = if file_content
-                    file_content
-                  elsif options[:open_texts] && options[:path_to_uri]
-                    uri = options[:path_to_uri].call(original_path)
-                    options[:open_texts][uri]&.string || File.read(original_path)
-                  else
-                    File.read(original_path)
-                  end
-
         result = Prism.parse(content)
         return [ignored_lines, ignored_blocks] unless result.success?
 
@@ -79,12 +68,8 @@ module TypeProf
             ignored_lines.add(line_num)
           end
         end
-      rescue Errno::ENOENT
-        # ファイルが存在しない場合は無視リストは空
       rescue StandardError => e
-        if options[:output_diagnostics] || options[:show_errors]
-          warn "Warning: Failed to collect ignored lines from #{original_path}: #{e.message}"
-        end
+        warn "Warning: Failed to collect ignored lines: #{e.message}"
       end
 
       [ignored_lines, ignored_blocks]

@@ -244,12 +244,7 @@ module TypeProf::LSP
 
       all_diagnostics = []
       each_core(path) do |core|
-        lsp_options = {
-          open_texts: @open_texts,
-          path_to_uri: method(:path_to_uri),
-          show_errors: @core_options[:show_errors]
-        }
-        core.diagnostics(path, lsp_options) do |diag|
+        core.diagnostics(path) do |diag|
           all_diagnostics << diag
         end
       end
