@@ -486,7 +486,7 @@ module TypeProf::Core
       s
     end
 
-    def batch(files, output, options = {})
+    def batch(files, output)
       if @options[:output_typeprof_version]
         output.puts "# TypeProf #{ TypeProf::VERSION }"
         output.puts
@@ -519,24 +519,18 @@ module TypeProf::Core
         first = false
         output.puts "# #{ file }"
         if @options[:output_diagnostics]
-          if options[:filter_diagnostics] && block_given?
-            ignored_lines, ignored_blocks = yield(file)
+          ignored_lines, ignored_blocks = TypeProf::DirectiveParser.collect_ignored_lines(file, @options)
 
-            diagnostics = []
-            diagnostics(file) { |diag| diagnostics << diag }
+          diagnostics = []
+          diagnostics(file) { |diag| diagnostics << diag }
 
-            filtered_diagnostics = TypeProf::DiagnosticFilter.new(
-              ignored_lines,
-              ignored_blocks
-            ).call(diagnostics)
+          filtered_diagnostics = TypeProf::DiagnosticFilter.new(
+            ignored_lines,
+            ignored_blocks
+          ).call(diagnostics)
 
-            filtered_diagnostics.each do |diag|
-              output.puts "# #{ diag.code_range.to_s }:#{ diag.msg }"
-            end
-          else
-            diagnostics(file) do |diag|
-              output.puts "# #{ diag.code_range.to_s }:#{ diag.msg }"
-            end
+          filtered_diagnostics.each do |diag|
+            output.puts "# #{ diag.code_range.to_s }:#{ diag.msg }"
           end
         end
         output.puts dump_declarations(file)

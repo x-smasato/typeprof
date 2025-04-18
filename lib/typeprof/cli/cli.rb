@@ -130,9 +130,7 @@ module TypeProf::CLI
       set_profiler do
         output = @cli_options[:output]
 
-        core.batch(files, output, filter_diagnostics: true) do |file|
-          TypeProf::DirectiveParser.collect_ignored_lines(file, @core_options)
-        end
+        core.batch(files, output)
 
         output.close
       end
