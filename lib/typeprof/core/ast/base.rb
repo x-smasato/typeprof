@@ -168,11 +168,7 @@ module TypeProf::Core
         each_subnode do |subnode|
           subnode.diagnostics(genv) { |d| diags << d }
         end
-        # ProgramNodeのみ@source_textを持つ
-        if respond_to?(:source_text) && source_text
-          ignored_lines, ignored_blocks = TypeProf::DirectiveParser.collect_ignored_lines(source_text)
-          diags = TypeProf::DiagnosticFilter.new(ignored_lines, ignored_blocks).call(diags)
-        end
+        # フィルタリングはサブクラスで実装
         diags.each(&blk) if blk
         diags
       end
@@ -213,6 +209,22 @@ module TypeProf::Core
 
       def subnodes = { body: }
       def attrs = { tbl: }
+
+      # フィルター済みの診断情報を返すメソッド
+      def filtered_diagnostics(genv, &blk)
+        # 通常の診断情報を収集
+        diags = diagnostics(genv)
+
+        # フィルタリングを実行
+        if @source_text
+          ignored_lines, ignored_blocks = TypeProf::DirectiveParser.collect_ignored_lines(@source_text)
+          diags = TypeProf::DiagnosticFilter.new(ignored_lines, ignored_blocks).call(diags)
+        end
+
+        # ブロックがあれば各診断情報に対して実行
+        diags.each(&blk) if blk
+        diags
+      end
 
       def install0(genv)
         @tbl.each {|var| @lenv.locals[var] = Source.new(genv.nil_type) }
