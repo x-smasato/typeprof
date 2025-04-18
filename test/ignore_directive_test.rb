@@ -16,10 +16,10 @@ module TypeProf
     private
 
     def run_typeprof(file)
-      output = ''
+      output = StringIO.new
 
       original_stdout = $stdout
-      $stdout = StringIO.new(output)
+      $stdout = output
 
       begin
         TypeProf::CLI::CLI.new(['--show-errors', file]).run
@@ -27,7 +27,7 @@ module TypeProf
         $stdout = original_stdout
       end
 
-      output
+      output.string
     end
   end
 end
