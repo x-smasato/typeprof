@@ -160,13 +160,16 @@ module TypeProf::Core
       end
 
       def diagnostics(genv, &blk)
-        @changes.diagnostics.each(&blk)
+        diags = []
+        @changes.diagnostics.each { |d| diags << d }
         @changes.boxes.each_value do |box|
-          box.diagnostics(genv, &blk)
+          box.diagnostics(genv) { |d| diags << d }
         end
         each_subnode do |subnode|
-          subnode.diagnostics(genv, &blk)
+          subnode.diagnostics(genv) { |d| diags << d }
         end
+        diags.each(&blk) if blk
+        diags
       end
 
       def get_vertexes(vtxs)
@@ -192,19 +195,31 @@ module TypeProf::Core
     end
 
     class ProgramNode < Node
-      def initialize(raw_node, lenv)
+      def initialize(raw_node, lenv, source_text: nil)
         super(raw_node, lenv)
-
+        @source_text = source_text
         @tbl = raw_node.locals
         raw_body = raw_node.statements
 
         @body = AST.create_node(raw_body, lenv, false)
       end
 
-      attr_reader :tbl, :body
+      attr_reader :source_text, :tbl, :body
 
       def subnodes = { body: }
       def attrs = { tbl: }
+
+      def filtered_diagnostics(genv, &blk)
+        diags = diagnostics(genv)
+
+        if @source_text
+          ignored_lines, ignored_blocks = TypeProf::DirectiveParser.collect_ignored_lines(@source_text)
+          diags = TypeProf::DiagnosticFilter.new(ignored_lines, ignored_blocks).call(diags)
+        end
+
+        diags.each(&blk) if blk
+        diags
+      end
 
       def install0(genv)
         @tbl.each {|var| @lenv.locals[var] = Source.new(genv.nil_type) }

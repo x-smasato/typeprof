@@ -15,7 +15,7 @@ module TypeProf::Core
       cref = CRef::Toplevel
       lenv = LocalEnv.new(path, cref, {}, [])
 
-      ProgramNode.new(raw_scope, lenv)
+      ProgramNode.new(raw_scope, lenv, source_text: src)
     end
 
     #: (untyped, TypeProf::Core::LocalEnv, ?bool) -> TypeProf::Core::AST::Node
