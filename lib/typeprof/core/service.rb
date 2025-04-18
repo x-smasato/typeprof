@@ -59,13 +59,17 @@ module TypeProf::Core
       file = TypeProf::SourceFile.new(path, text, @genv)
       prev = @rb_files[path]
 
-      file.ast&.diff(prev&.ast) if prev && file.ast
+      unless file.ast
+        return false
+      end
+
+      file.ast.diff(prev&.ast) if prev && file.ast
       @rb_files[path] = file
 
-      file.ast&.define(@genv)
+      file.ast.define(@genv)
       prev&.ast&.undefine(@genv) if prev
       @genv.define_all
-      file.ast&.install(@genv)
+      file.ast.install(@genv)
       prev&.ast&.uninstall(@genv) if prev
       @genv.run_all
       true
@@ -490,7 +494,7 @@ module TypeProf::Core
           diags = []
           diagnostics(file) {|diag| diags << diag }
           diags.each do |diag|
-            output.puts "# #{ diag.code_range.to_s }: #{ diag.msg }"
+            output.puts "# #{ diag.code_range.to_s }:#{ diag.msg }"
           end
         end
         output.puts dump_declarations(file)
