@@ -138,8 +138,28 @@ module TypeProf::Core
       true
     end
 
-    def diagnostics(path, &blk)
-      @rb_text_nodes[path]&.diagnostics(@genv, &blk)
+    def diagnostics(path, options = {}, &blk)
+      return unless @rb_text_nodes[path]
+
+      # オプションをマージする
+      merged_options = @options.dup
+      merged_options = merged_options.merge(options) unless options.empty?
+
+      ignored_lines, ignored_blocks = TypeProf::DirectiveParser.collect_ignored_lines(path, merged_options)
+
+      diagnostics = []
+      @rb_text_nodes[path].diagnostics(@genv) do |diag|
+        diagnostics << diag
+      end
+
+      filtered_diagnostics = TypeProf::DiagnosticFilter.new(
+        ignored_lines,
+        ignored_blocks
+      ).call(diagnostics)
+
+      filtered_diagnostics.each(&blk) if blk
+
+      filtered_diagnostics
     end
 
     def definitions(path, pos)
@@ -519,17 +539,7 @@ module TypeProf::Core
         first = false
         output.puts "# #{ file }"
         if @options[:output_diagnostics]
-          ignored_lines, ignored_blocks = TypeProf::DirectiveParser.collect_ignored_lines(file, @options)
-
-          diagnostics = []
-          diagnostics(file) { |diag| diagnostics << diag }
-
-          filtered_diagnostics = TypeProf::DiagnosticFilter.new(
-            ignored_lines,
-            ignored_blocks
-          ).call(diagnostics)
-
-          filtered_diagnostics.each do |diag|
+          diagnostics(file) do |diag|
             output.puts "# #{ diag.code_range.to_s }:#{ diag.msg }"
           end
         end

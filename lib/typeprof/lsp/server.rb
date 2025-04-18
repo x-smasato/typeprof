@@ -244,24 +244,17 @@ module TypeProf::LSP
 
       all_diagnostics = []
       each_core(path) do |core|
-        core.diagnostics(path) { |diag| all_diagnostics << diag }
-      end
-
-      ignored_lines, ignored_blocks = TypeProf::DirectiveParser.collect_ignored_lines(
-        path,
-        {
+        lsp_options = {
           open_texts: @open_texts,
           path_to_uri: method(:path_to_uri),
           show_errors: @core_options[:show_errors]
         }
-      )
+        core.diagnostics(path, lsp_options) do |diag|
+          all_diagnostics << diag
+        end
+      end
 
-      filtered_diagnostics = TypeProf::DiagnosticFilter.new(
-        ignored_lines,
-        ignored_blocks,
-      ).call(all_diagnostics)
-
-      diagnostics = filtered_diagnostics.map do |diag|
+      diagnostics = all_diagnostics.map do |diag|
         {
           range: diag.code_range.to_lsp,
           severity: lsp_severity(@diagnostic_severity),
