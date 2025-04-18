@@ -199,6 +199,8 @@ module TypeProf::LSP
             msg = msg_class.new(self, json)
             @running_requests_from_client[json[:id]] = msg if json[:id]
             msg.run
+          else
+
           end
         else
           # response
