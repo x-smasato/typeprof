@@ -209,16 +209,7 @@ module TypeProf::Core
       def subnodes = { body: }
       def attrs = { tbl: }
 
-      def filtered_diagnostics(genv, &blk)
-        diags = diagnostics(genv)
 
-        if @source_text
-          diags = TypeProf::DiagnosticService.filter_diagnostics(diags, @source_text)
-        end
-
-        diags.each(&blk) if blk
-        diags
-      end
 
       def install0(genv)
         @tbl.each {|var| @lenv.locals[var] = Source.new(genv.nil_type) }
