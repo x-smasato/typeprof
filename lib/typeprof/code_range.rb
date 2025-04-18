@@ -107,18 +107,5 @@ module TypeProf
     def ==(other)
       @first == other.first && @last == other.last
     end
-
-    def to_lsp_range
-      {
-        start: {
-          line: @first.lineno - 1,     # LSPは0-basedなので1を引く
-          character: @first.column
-        },
-        end: {
-          line: @last.lineno - 1,      # LSPは0-basedなので1を引く
-          character: @last.column      # sizeメソッドは不要なので削除
-        }
-      }
-    end
   end
 end

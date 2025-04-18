@@ -263,7 +263,7 @@ module TypeProf::LSP
 
       diagnostics = filtered_diagnostics.map do |diag|
         {
-          range: diag.code_range.to_lsp_range,
+          range: diag.code_range.to_lsp,
           severity: lsp_severity(@diagnostic_severity),
           source: 'TypeProf',
           message: diag.msg
