@@ -209,8 +209,6 @@ module TypeProf::Core
       def subnodes = { body: }
       def attrs = { tbl: }
 
-
-
       def install0(genv)
         @tbl.each {|var| @lenv.locals[var] = Source.new(genv.nil_type) }
         @lenv.locals[:"*self"] = lenv.cref.get_self(genv)
