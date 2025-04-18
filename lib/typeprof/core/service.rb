@@ -139,21 +139,8 @@ module TypeProf::Core
     end
 
     def diagnostics(path, &blk)
-      return unless @rb_text_nodes[path]
-
-      diags = []
-      @rb_text_nodes[path].diagnostics(@genv) { |diag| diags << diag }
-      diags = filter_diagnostics(path, diags)
-      diags.each(&blk) if blk
-      diags
+      @rb_text_nodes[path]&.diagnostics(@genv, &blk)
     end
-
-    def filter_diagnostics(path, diagnostics)
-      content = @rb_text_nodes[path]&.source_text
-      ignored_lines, ignored_blocks = TypeProf::DirectiveParser.collect_ignored_lines(content)
-      TypeProf::DiagnosticFilter.new(ignored_lines, ignored_blocks).call(diagnostics)
-    end
-    private :filter_diagnostics
 
     def definitions(path, pos)
       defs = []

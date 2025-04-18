@@ -160,13 +160,21 @@ module TypeProf::Core
       end
 
       def diagnostics(genv, &blk)
-        @changes.diagnostics.each(&blk)
+        diags = []
+        @changes.diagnostics.each { |d| diags << d }
         @changes.boxes.each_value do |box|
-          box.diagnostics(genv, &blk)
+          box.diagnostics(genv) { |d| diags << d }
         end
         each_subnode do |subnode|
-          subnode.diagnostics(genv, &blk)
+          subnode.diagnostics(genv) { |d| diags << d }
         end
+        # ProgramNodeのみ@source_textを持つ
+        if respond_to?(:source_text) && source_text
+          ignored_lines, ignored_blocks = TypeProf::DirectiveParser.collect_ignored_lines(source_text)
+          diags = TypeProf::DiagnosticFilter.new(ignored_lines, ignored_blocks).call(diags)
+        end
+        diags.each(&blk) if blk
+        diags
       end
 
       def get_vertexes(vtxs)
