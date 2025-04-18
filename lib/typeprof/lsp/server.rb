@@ -236,45 +236,20 @@ module TypeProf::LSP
     end
 
     def publish_diagnostics(uri)
-      text = @open_texts[uri]
-      return unless text
-
-      path = uri_to_path(uri)
-      return unless target_path?(path)
-
-      all_diagnostics = []
-      each_core(path) do |core|
-        core.diagnostics(path) do |diag|
-          all_diagnostics << diag
+      (@publish_all_diagnostics ? @open_texts : [[uri, @open_texts[uri]]]).each do |uri, text|
+        diags = []
+        if text
+          @cores.each do |_, core|
+            core.diagnostics(text.path) do |diag|
+              diags << diag.to_lsp(severity: @diagnostic_severity)
+            end
+          end
         end
-      end
-
-      diagnostics = all_diagnostics.map do |diag|
-        {
-          range: diag.code_range.to_lsp,
-          severity: lsp_severity(@diagnostic_severity),
-          source: 'TypeProf',
-          message: diag.msg
-        }
-      end
-
-      send_notification('textDocument/publishDiagnostics', uri: uri, diagnostics: diagnostics)
-    end
-
-    private
-
-    def lsp_severity(severity)
-      case severity
-      when :error
-        1   # Error
-      when :warning
-        2   # Warning
-      when :info
-        3   # Information
-      when :hint
-        4   # Hint
-      else
-        1   # デフォルトはError
+        send_notification(
+          "textDocument/publishDiagnostics",
+          uri: uri,
+          diagnostics: diags
+        )
       end
     end
   end
