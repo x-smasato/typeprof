@@ -222,7 +222,9 @@ module TypeProf::CLI
       set_profiler do
         output = @cli_options[:output]
 
-        modified_batch(core, files, output)
+        core.batch(files, output, filter_diagnostics: true) do |file|
+          collect_ignored_lines(file)
+        end
 
         output.close
       end
@@ -230,60 +232,6 @@ module TypeProf::CLI
     rescue OptionParser::InvalidOption, OptionParser::MissingArgument
       puts $!
       exit 1
-    end
-
-    def modified_batch(core, files, output)
-      if @core_options[:output_typeprof_version]
-        output.puts "# TypeProf #{TypeProf::VERSION}"
-        output.puts
-      end
-
-      i = 0
-      show_files = files.select do |file|
-        if @core_options[:display_indicator]
-          $stderr << format("\r[%d/%d] %s\e[K", i, files.size, file)
-          i += 1
-        end
-
-        content = File.read(file)
-        res = core.update_file(file, content)
-
-        if res
-          true
-        else
-          output.puts "# failed to analyze: #{file}"
-          false
-        end
-      end
-
-      $stderr << "\r\e[K" if @core_options[:display_indicator]
-
-      first = true
-      show_files.each do |file|
-        next if File.extname(file) == '.rbs'
-
-        output.puts unless first
-        first = false
-        output.puts "# #{file}"
-
-        if @core_options[:output_diagnostics]
-          ignored_lines, ignored_blocks = collect_ignored_lines(file)
-
-          diagnostics = []
-          core.diagnostics(file) { |diag| diagnostics << diag }
-
-          filtered_diagnostics = TypeProf::DiagnosticFilter.new(
-            ignored_lines,
-            ignored_blocks,
-          ).call(diagnostics)
-
-          filtered_diagnostics.each do |diag|
-            output.puts "# #{diag.code_range}:#{diag.msg}"
-          end
-        end
-
-        output.puts core.dump_declarations(file)
-      end
     end
 
     def find_files
