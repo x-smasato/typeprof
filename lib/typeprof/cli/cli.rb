@@ -120,10 +120,6 @@ module TypeProf::CLI
       raise
     end
 
-    def collect_ignored_lines(path)
-      TypeProf::DirectiveParser.collect_ignored_lines(path, @core_options)
-    end
-
     def run_cli
       core = TypeProf::Core::Service.new(@core_options)
 
@@ -135,7 +131,7 @@ module TypeProf::CLI
         output = @cli_options[:output]
 
         core.batch(files, output, filter_diagnostics: true) do |file|
-          collect_ignored_lines(file)
+          TypeProf::DirectiveParser.collect_ignored_lines(file, @core_options)
         end
 
         output.close
