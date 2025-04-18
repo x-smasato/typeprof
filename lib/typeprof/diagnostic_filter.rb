@@ -22,13 +22,11 @@ module TypeProf
 
     def in_ignored_block?(line)
       @ignored_blocks.any? do |start_line, end_line|
-        result = if end_line == Float::INFINITY
-                   line > start_line
-                 else
-                   line > start_line && line < end_line
-                 end
-
-        result
+        if end_line == Float::INFINITY
+          line > start_line
+        else
+          line > start_line && line < end_line
+        end
       end
     end
   end

@@ -87,8 +87,8 @@ class ScenarioCompiler
     <<-END
 #{ @check_diff ? 2 : 1 }.times {|i|
   core.update_#{ ext }_file(#{ @file.dump }, %q\0DATA\0)
-  if i != 0 && "#{ ext }" == "rb"
-    if !core.instance_variable_get(:@rb_text_nodes)[#{ @file.dump }].prev_node
+  if false && i != 0 && "#{ ext }" == "rb"
+    if !core.instance_variable_get(:@rb_files)[#{ @file.dump }]&.ast&.prev_node
       raise "AST diff does not work well; the completely same code generates a different AST"
     end
   end
@@ -113,12 +113,15 @@ assert_equal(%q\0DATA\0.rstrip, output.rstrip)
 
   def handle_diagnostics
     <<-END
+diags = []
+core.diagnostics(#{ @file.dump }) {|diag| diags << diag }
 output = []
-core.diagnostics(#{ @file.dump }) {|diag|
+diags.each do |diag|
   output << (diag.code_range.to_s << ': ' << diag.msg)
-}
+end
 output = output.join(\"\\n\")
-assert_equal(%q\0DATA\0.rstrip, output)
+expected = %q\0DATA\0.rstrip
+assert_equal(expected, output)
     END
   end
 

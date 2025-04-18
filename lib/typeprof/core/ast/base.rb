@@ -195,16 +195,15 @@ module TypeProf::Core
     end
 
     class ProgramNode < Node
-      def initialize(raw_node, lenv, source_text: nil)
+      def initialize(raw_node, lenv)
         super(raw_node, lenv)
-        @source_text = source_text
         @tbl = raw_node.locals
         raw_body = raw_node.statements
 
         @body = AST.create_node(raw_body, lenv, false)
       end
 
-      attr_reader :source_text, :tbl, :body
+      attr_reader :tbl, :body
 
       def subnodes = { body: }
       def attrs = { tbl: }
