@@ -139,7 +139,16 @@ module TypeProf::Core
     end
 
     def diagnostics(path, &blk)
-      @rb_text_nodes[path]&.filtered_diagnostics(@genv, &blk)
+      node = @rb_text_nodes[path]
+      return unless node
+      
+      diags = node.diagnostics(@genv)
+      if node.respond_to?(:source_text) && node.source_text
+        diags = TypeProf::DiagnosticService.filter_diagnostics(diags, node.source_text)
+      end
+      
+      diags.each(&blk) if blk
+      diags
     end
 
     def definitions(path, pos)

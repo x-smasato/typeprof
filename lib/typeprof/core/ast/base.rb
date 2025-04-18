@@ -213,8 +213,7 @@ module TypeProf::Core
         diags = diagnostics(genv)
 
         if @source_text
-          ignored_lines, ignored_blocks = TypeProf::DirectiveParser.collect_ignored_lines(@source_text)
-          diags = TypeProf::DiagnosticFilter.new(ignored_lines, ignored_blocks).call(diags)
+          diags = TypeProf::DiagnosticService.filter_diagnostics(diags, @source_text)
         end
 
         diags.each(&blk) if blk
