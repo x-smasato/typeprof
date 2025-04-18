@@ -247,7 +247,14 @@ module TypeProf::LSP
         core.diagnostics(path) { |diag| all_diagnostics << diag }
       end
 
-      ignored_lines, ignored_blocks = collect_ignored_lines(path)
+      ignored_lines, ignored_blocks = TypeProf::DirectiveParser.collect_ignored_lines(
+        path,
+        {
+          open_texts: @open_texts,
+          path_to_uri: method(:path_to_uri),
+          show_errors: @core_options[:show_errors]
+        }
+      )
 
       filtered_diagnostics = TypeProf::DiagnosticFilter.new(
         ignored_lines,
@@ -281,17 +288,6 @@ module TypeProf::LSP
       else
         1   # デフォルトはError
       end
-    end
-
-    def collect_ignored_lines(path)
-      TypeProf::DirectiveParser.collect_ignored_lines(
-        path,
-        {
-          open_texts: @open_texts,
-          path_to_uri: method(:path_to_uri),
-          show_errors: @core_options[:show_errors]
-        }
-      )
     end
   end
 
