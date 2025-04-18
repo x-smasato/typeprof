@@ -130,7 +130,7 @@ module TypeProf::CLI
       set_profiler do
         output = @cli_options[:output]
 
-        core.batch(files, output)
+        core.batch(files, @cli_options[:output])
 
         output.close
       end
