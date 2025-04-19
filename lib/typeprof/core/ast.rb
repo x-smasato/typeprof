@@ -15,7 +15,8 @@ module TypeProf::Core
       cref = CRef::Toplevel
       lenv = LocalEnv.new(path, cref, {}, [])
 
-      ProgramNode.new(raw_scope, lenv)
+      ignored = IgnoreDirective::Scanner.collect(result, src)
+      ProgramNode.new(raw_scope, lenv, ignored: ignored)
     end
 
     #: (untyped, TypeProf::Core::LocalEnv, ?bool) -> TypeProf::Core::AST::Node

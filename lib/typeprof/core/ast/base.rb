@@ -192,19 +192,34 @@ module TypeProf::Core
     end
 
     class ProgramNode < Node
-      def initialize(raw_node, lenv)
+      def initialize(raw_node, lenv, ignored: [])
         super(raw_node, lenv)
 
         @tbl = raw_node.locals
+        @ignored_filter = ignored.empty? ? nil : IgnoreDirective::Filter.new(ignored)
         raw_body = raw_node.statements
 
         @body = AST.create_node(raw_body, lenv, false)
       end
 
-      attr_reader :tbl, :body
+      attr_reader :tbl, :ignored_filter, :body
 
       def subnodes = { body: }
       def attrs = { tbl: }
+
+      def diagnostics(genv, &blk)
+        if ignored_filter
+          super(genv) do |diag|
+            lineno = diag.code_range.first.lineno
+            next if ignored_filter.ignore?(lineno)
+            blk&.call(diag)
+          end
+        else
+          super(genv) do |diag|
+            blk&.call(diag)
+          end
+        end
+      end
 
       def install0(genv)
         @tbl.each {|var| @lenv.locals[var] = Source.new(genv.nil_type) }
