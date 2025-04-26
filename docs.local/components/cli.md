@@ -1,0 +1,120 @@
+# CLIインターフェース
+
+CLIインターフェースは、TypeProfをコマンドラインから使用するためのコンポーネントです。
+
+## 概要
+
+CLIインターフェースは、<ref_file file="lib/typeprof/cli/cli.rb" />で定義されています。`CLI`クラスは、コマンドライン引数の解析、設定の管理、ファイルの処理などを担当します。
+
+## 基本構造
+
+`CLI`クラスの基本構造は以下の通りです：
+
+<ref_snippet file="lib/typeprof/cli/cli.rb" lines="2-79" />
+
+主なコンポーネント：
+- `initialize`: コマンドライン引数を解析し、設定を初期化
+- `core_options`: TypeProfのコアサービスに渡すオプション
+- `lsp_options`: LSPサーバーに渡すオプション
+- `cli_options`: CLI自体のオプション
+
+## コマンドライン引数の解析
+
+CLIインターフェースは、様々なコマンドライン引数をサポートしています：
+
+<ref_snippet file="lib/typeprof/cli/cli.rb" lines="8-47" />
+
+主なオプション：
+- `-o OUTFILE`: 出力先ファイルを指定
+- `-q, --quiet`: 静かモード
+- `-v, --verbose`: 詳細モード
+- `--version`: TypeProfのバージョンを表示
+- `--collection PATH`: コレクション設定ファイルのパスを指定
+- `--lsp`: LSPサーバーモードで起動
+- `--[no-]show-typeprof-version`: 出力にTypeProfのバージョンを表示するかどうか
+- `--[no-]show-errors`: 解析中に見つかったエラーを表示するかどうか
+- `--[no-]show-parameter-names`: メソッドのパラメータ名を表示するかどうか
+- `--[no-]show-source-locations`: メソッド定義の場所を表示するかどうか
+- `--port PORT`: LSPサーバーのポート番号を指定
+- `--stdio`: LSP通信に標準入出力を使用
+
+## RBSコレクションの設定
+
+RBSコレクションの設定は、`setup_rbs_collection`メソッドで処理されます：
+
+<ref_snippet file="lib/typeprof/cli/cli.rb" lines="81-98" />
+
+このメソッドは、RBSコレクション設定ファイルを読み込み、TypeProfの型推論で使用するRBS定義を設定します。
+
+## 実行フロー
+
+CLIインターフェースの実行フローは、`run`メソッドで管理されます：
+
+<ref_snippet file="lib/typeprof/cli/cli.rb" lines="103-110" />
+
+このメソッドは、LSPモードかCLIモードかに応じて、適切な処理を実行します。
+
+### LSPモードの実行
+
+LSPモードの実行は、`run_lsp`メソッドで処理されます：
+
+<ref_snippet file="lib/typeprof/cli/cli.rb" lines="112-121" />
+
+このメソッドは、標準入出力またはソケットを使用してLSPサーバーを起動します。
+
+### CLIモードの実行
+
+CLIモードの実行は、`run_cli`メソッドで処理されます：
+
+<ref_snippet file="lib/typeprof/cli/cli.rb" lines="123-141" />
+
+このメソッドは、以下の処理を行います：
+1. TypeProfのコアサービスを初期化
+2. 処理対象のファイルを検索
+3. ファイルを処理し、結果を出力
+
+## ファイルの検索
+
+処理対象のファイルは、`find_files`メソッドで検索されます：
+
+<ref_snippet file="lib/typeprof/cli/cli.rb" lines="143-161" />
+
+このメソッドは、コマンドライン引数で指定されたパスからRubyファイルとRBSファイルを検索します。
+
+## プロファイリングのサポート
+
+CLIインターフェースは、デバッグ目的のためのプロファイリングもサポートしています：
+
+<ref_snippet file="lib/typeprof/cli/cli.rb" lines="163-177" />
+
+## CLIインターフェースの使用例
+
+TypeProfのCLIインターフェースは、以下のように使用できます：
+
+```bash
+# 基本的な使用方法
+typeprof example.rb
+
+# 出力先ファイルを指定
+typeprof -o result.rbs example.rb
+
+# 詳細モード
+typeprof -v example.rb
+
+# LSPサーバーモードで起動（標準入出力を使用）
+typeprof --lsp --stdio
+
+# LSPサーバーモードで起動（ソケットを使用）
+typeprof --lsp --port 8080
+```
+
+## CLIインターフェースの重要性
+
+CLIインターフェースは、TypeProfを使用するための主要なエントリーポイントであり、以下の役割を果たします：
+
+1. **コマンドライン引数の解析**: ユーザーからの入力を解析し、適切な設定に変換
+2. **ファイル管理**: 処理対象のファイルを検索し、管理
+3. **出力管理**: 型推論の結果を適切な形式で出力
+4. **LSPサーバーの起動**: LSPモードでの起動をサポート
+
+CLIインターフェースの理解は、TypeProfを効果的に使用するために重要です。

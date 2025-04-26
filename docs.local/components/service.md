@@ -1,0 +1,109 @@
+# サービスレイヤー
+
+サービスレイヤーは、TypeProfの型解析プロセスを調整し、ファイルの更新、クエリ処理、診断など、高レベルな操作を提供するコンポーネントです。
+
+## 概要
+
+
+サービスレイヤーは、<ref_file file="lib/typeprof/core/service.rb" />で定義されています。`Service`クラスは、TypeProfの主要なインターフェースとして機能し、CLIやLSPなどの上位レイヤーからの要求を処理します。
+
+## 基本構造
+
+`Service`クラスの基本構造は以下の通りです：
+
+<ref_snippet file="lib/typeprof/core/service.rb" lines="2-13" />
+
+主なコンポーネント：
+- `options`: サービスの設定オプション
+- `rb_text_nodes`: Rubyファイルのテキストノード
+- `rbs_text_nodes`: RBSファイルのテキストノード
+- `genv`: グローバル環境
+
+## ファイル管理
+
+サービスレイヤーは、Rubyファイルとそれに関連するASTノードを管理します：
+
+### ファイルの更新
+
+ファイルの更新は、`update_file`メソッドで処理されます：
+
+<ref_snippet file="lib/typeprof/core/service.rb" lines="49-55" />
+
+このメソッドは、ファイルの拡張子に基づいて、RubyファイルまたはRBSファイルの更新を処理します。
+
+### Rubyファイルの更新
+
+Rubyファイルの更新は、`update_rb_file`メソッドで処理されます：
+
+<ref_snippet file="lib/typeprof/core/service.rb" lines="57-115" />
+
+このメソッドは、以下の処理を行います：
+1. ファイルを読み込み、ASTに解析
+2. 前のASTとの差分を計算
+3. 新しいASTを定義し、インストール
+4. 型推論を実行
+
+### RBSファイルの更新
+
+RBSファイルの更新は、`update_rbs_file`メソッドで処理されます：
+
+<ref_snippet file="lib/typeprof/core/service.rb" lines="117-139" />
+
+## クエリ処理
+
+サービスレイヤーは、コードに関する様々なクエリを処理するメソッドを提供します：
+
+### 診断情報
+
+診断情報は、`diagnostics`メソッドで取得できます：
+
+<ref_snippet file="lib/typeprof/core/service.rb" lines="141-143" />
+
+### 定義の検索
+
+定義の検索は、`definitions`メソッドで処理されます：
+
+<ref_snippet file="lib/typeprof/core/service.rb" lines="145-195" />
+
+このメソッドは、指定された位置にあるシンボルの定義を検索します。
+
+### 型定義の検索
+
+型定義の検索は、`type_definitions`メソッドで処理されます：
+
+<ref_snippet file="lib/typeprof/core/service.rb" lines="197-215" />
+
+### 参照の検索
+
+参照の検索は、`references`メソッドで処理されます：
+
+<ref_snippet file="lib/typeprof/core/service.rb" lines="217-255" />
+
+このメソッドは、指定された位置にあるシンボルへの参照を検索します。
+
+### ホバー情報
+
+ホバー情報は、`hover`メソッドで取得できます：
+
+<ref_snippet file="lib/typeprof/core/service.rb" lines="318-348" />
+
+このメソッドは、指定された位置にあるコードの型情報を提供します。
+
+## バッチ処理
+
+サービスレイヤーは、複数のファイルを一度に処理するためのバッチ処理機能も提供します：
+
+<ref_snippet file="lib/typeprof/core/service.rb" lines="489-520" />
+
+このメソッドは、指定されたファイルのリストを処理し、結果を出力します。
+
+## サービスレイヤーの重要性
+
+サービスレイヤーは、TypeProfの型推論エンジンと上位レイヤー（CLIやLSP）の間のインターフェースとして機能し、以下の役割を果たします：
+
+1. **ファイル管理**: Rubyファイルとそれに関連するASTノードを管理
+2. **型推論の調整**: 型推論プロセスを調整し、結果を管理
+3. **クエリ処理**: コードに関する様々なクエリを処理
+4. **診断情報**: 型エラーや警告などの診断情報を提供
+
+サービスレイヤーの理解は、TypeProfの全体的なアーキテクチャを理解する上で重要です。
