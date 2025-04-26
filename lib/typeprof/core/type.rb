@@ -207,6 +207,19 @@ module TypeProf::Core
       def check_match(genv, changes, vtx)
         vtx.each_type do |other_ty|
           if other_ty.is_a?(Array)
+            if @elems.size == 1 && other_ty.elems.size > 0 && 
+               @elems[0].is_a?(Source) && @elems[0].types.size == 1 &&
+               @elems[0].types.first.is_a?(Type::Instance)
+              pattern_elem_type = @elems[0]
+              other_elem_type = other_ty.get_elem(genv)
+              
+              if !pattern_elem_type.check_match(genv, changes, other_elem_type)
+                if changes.node.is_a?(AST::ArrayPatternNode)
+                  return false
+                end
+              end
+            end
+            
             if @elems.size == other_ty.elems.size
               match = true
               @elems.zip(other_ty.elems) do |elem, other_elem|
