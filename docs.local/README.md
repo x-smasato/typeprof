@@ -15,6 +15,9 @@
   - [LSP統合](./components/lsp.md)
 - [抽象値](./abstract_values.md)
 - [コントリビューションガイド](./contribution_guide.md)
+- チュートリアル
+  - [開発ワークフロー](./tutorials/development_workflow.md)
+  - [TypeProfの拡張方法](./tutorials/extending_typeprof.md)
 
 ## TypeProfとは
 

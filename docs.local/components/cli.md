@@ -4,13 +4,11 @@ CLIインターフェースは、TypeProfをコマンドラインから使用す
 
 ## 概要
 
-CLIインターフェースは、<ref_file file="lib/typeprof/cli/cli.rb" />で定義されています。`CLI`クラスは、コマンドライン引数の解析、設定の管理、ファイルの処理などを担当します。
+CLIインターフェースは、[lib/typeprof/cli/cli.rb](../../lib/typeprof/cli/cli.rb)で定義されています。`CLI`クラスは、コマンドライン引数の解析、設定の管理、ファイルの処理などを担当します。
 
 ## 基本構造
 
 `CLI`クラスの基本構造は以下の通りです：
-
-<ref_snippet file="lib/typeprof/cli/cli.rb" lines="2-79" />
 
 主なコンポーネント：
 - `initialize`: コマンドライン引数を解析し、設定を初期化
@@ -21,8 +19,6 @@ CLIインターフェースは、<ref_file file="lib/typeprof/cli/cli.rb" />で�
 ## コマンドライン引数の解析
 
 CLIインターフェースは、様々なコマンドライン引数をサポートしています：
-
-<ref_snippet file="lib/typeprof/cli/cli.rb" lines="8-47" />
 
 主なオプション：
 - `-o OUTFILE`: 出力先ファイルを指定
@@ -42,15 +38,11 @@ CLIインターフェースは、様々なコマンドライン引数をサポ�
 
 RBSコレクションの設定は、`setup_rbs_collection`メソッドで処理されます：
 
-<ref_snippet file="lib/typeprof/cli/cli.rb" lines="81-98" />
-
 このメソッドは、RBSコレクション設定ファイルを読み込み、TypeProfの型推論で使用するRBS定義を設定します。
 
 ## 実行フロー
 
 CLIインターフェースの実行フローは、`run`メソッドで管理されます：
-
-<ref_snippet file="lib/typeprof/cli/cli.rb" lines="103-110" />
 
 このメソッドは、LSPモードかCLIモードかに応じて、適切な処理を実行します。
 
@@ -58,15 +50,11 @@ CLIインターフェースの実行フローは、`run`メソッドで管理さ
 
 LSPモードの実行は、`run_lsp`メソッドで処理されます：
 
-<ref_snippet file="lib/typeprof/cli/cli.rb" lines="112-121" />
-
 このメソッドは、標準入出力またはソケットを使用してLSPサーバーを起動します。
 
 ### CLIモードの実行
 
 CLIモードの実行は、`run_cli`メソッドで処理されます：
-
-<ref_snippet file="lib/typeprof/cli/cli.rb" lines="123-141" />
 
 このメソッドは、以下の処理を行います：
 1. TypeProfのコアサービスを初期化
@@ -77,15 +65,11 @@ CLIモードの実行は、`run_cli`メソッドで処理されます：
 
 処理対象のファイルは、`find_files`メソッドで検索されます：
 
-<ref_snippet file="lib/typeprof/cli/cli.rb" lines="143-161" />
-
 このメソッドは、コマンドライン引数で指定されたパスからRubyファイルとRBSファイルを検索します。
 
 ## プロファイリングのサポート
 
 CLIインターフェースは、デバッグ目的のためのプロファイリングもサポートしています：
-
-<ref_snippet file="lib/typeprof/cli/cli.rb" lines="163-177" />
 
 ## CLIインターフェースの使用例
 

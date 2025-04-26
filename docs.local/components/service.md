@@ -5,13 +5,11 @@
 ## 概要
 
 
-サービスレイヤーは、<ref_file file="lib/typeprof/core/service.rb" />で定義されています。`Service`クラスは、TypeProfの主要なインターフェースとして機能し、CLIやLSPなどの上位レイヤーからの要求を処理します。
+サービスレイヤーは、[lib/typeprof/core/service.rb](../../lib/typeprof/core/service.rb)で定義されています。`Service`クラスは、TypeProfの主要なインターフェースとして機能し、CLIやLSPなどの上位レイヤーからの要求を処理します。
 
 ## 基本構造
 
 `Service`クラスの基本構造は以下の通りです：
-
-<ref_snippet file="lib/typeprof/core/service.rb" lines="2-13" />
 
 主なコンポーネント：
 - `options`: サービスの設定オプション
@@ -27,15 +25,11 @@
 
 ファイルの更新は、`update_file`メソッドで処理されます：
 
-<ref_snippet file="lib/typeprof/core/service.rb" lines="49-55" />
-
 このメソッドは、ファイルの拡張子に基づいて、RubyファイルまたはRBSファイルの更新を処理します。
 
 ### Rubyファイルの更新
 
 Rubyファイルの更新は、`update_rb_file`メソッドで処理されます：
-
-<ref_snippet file="lib/typeprof/core/service.rb" lines="57-115" />
 
 このメソッドは、以下の処理を行います：
 1. ファイルを読み込み、ASTに解析
@@ -47,8 +41,6 @@ Rubyファイルの更新は、`update_rb_file`メソッドで処理されます
 
 RBSファイルの更新は、`update_rbs_file`メソッドで処理されます：
 
-<ref_snippet file="lib/typeprof/core/service.rb" lines="117-139" />
-
 ## クエリ処理
 
 サービスレイヤーは、コードに関する様々なクエリを処理するメソッドを提供します：
@@ -57,13 +49,9 @@ RBSファイルの更新は、`update_rbs_file`メソッドで処理されます
 
 診断情報は、`diagnostics`メソッドで取得できます：
 
-<ref_snippet file="lib/typeprof/core/service.rb" lines="141-143" />
-
 ### 定義の検索
 
 定義の検索は、`definitions`メソッドで処理されます：
-
-<ref_snippet file="lib/typeprof/core/service.rb" lines="145-195" />
 
 このメソッドは、指定された位置にあるシンボルの定義を検索します。
 
@@ -71,13 +59,9 @@ RBSファイルの更新は、`update_rbs_file`メソッドで処理されます
 
 型定義の検索は、`type_definitions`メソッドで処理されます：
 
-<ref_snippet file="lib/typeprof/core/service.rb" lines="197-215" />
-
 ### 参照の検索
 
 参照の検索は、`references`メソッドで処理されます：
-
-<ref_snippet file="lib/typeprof/core/service.rb" lines="217-255" />
 
 このメソッドは、指定された位置にあるシンボルへの参照を検索します。
 
@@ -85,15 +69,11 @@ RBSファイルの更新は、`update_rbs_file`メソッドで処理されます
 
 ホバー情報は、`hover`メソッドで取得できます：
 
-<ref_snippet file="lib/typeprof/core/service.rb" lines="318-348" />
-
 このメソッドは、指定された位置にあるコードの型情報を提供します。
 
 ## バッチ処理
 
 サービスレイヤーは、複数のファイルを一度に処理するためのバッチ処理機能も提供します：
-
-<ref_snippet file="lib/typeprof/core/service.rb" lines="489-520" />
 
 このメソッドは、指定されたファイルのリストを処理し、結果を出力します。
 
